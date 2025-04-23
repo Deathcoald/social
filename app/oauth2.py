@@ -1,6 +1,6 @@
 import jwt
 
-from jwt import InvalidTokenError
+from jwt import InvalidTokenError, decode
 from fastapi import HTTPException, status, Depends
 from jwt.exceptions import InvalidTokenError
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -55,3 +55,18 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     user = db.query(models.User).filter(models.User.id == token.id).first()
 
     return user
+
+def authenticate_ws_user(token: str, db: Session) -> models.User:
+    try:
+        payload = decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        user_id: int = payload.get("user_id")
+        if user_id is None:
+            raise Exception("Invalid token")
+        
+        user = db.query(models.User).filter(models.User.id == user_id).first()
+        if not user:
+            raise Exception("User not found")
+
+        return user
+    except InvalidTokenError:
+        raise Exception("Token decode error")

@@ -54,3 +54,18 @@ class Token_Data(BaseModel):
 class Vote(BaseModel):
     post_id : int
     dir: conint(le=1)
+
+class Send_message(BaseModel):
+    sender_id : int
+    receiver_id : int
+    content : str
+
+class Out_message(BaseModel):
+    id: int
+    sender_id: int
+    receiver_id: int
+    content: str
+    timestamp: str
+
+    class Config:
+        orm_model = True
