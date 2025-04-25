@@ -7,8 +7,8 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives import serialization, hashes, c
 
 from .config import settings
 from . import schemas, database, models
@@ -87,3 +87,53 @@ def generate_keys(password: str):
     format=serialization.PublicFormat.SubjectPublicKeyInfo).decode()
 
     return pem_private, pem_public
+
+def create_sign(private_key, message: str):
+
+    content_hash = hashes.Hash(hashes.SHA256())
+    content_hash.update(message)
+    message_hash = content_hash.finalize()
+
+    signature = private_key.sign(
+    message_hash,
+    padding.PSS(
+        mgf=padding.MGF1(hashes.SHA256()),
+        salt_length=padding.PSS.MAX_LENGTH
+    ),
+    hashes.SHA256())
+
+    return signature
+
+def verify_singature(public_key, signature, message):
+
+    content_hash = hashes.Hash(hashes.SHA256())
+    content_hash.update(message)
+    message_hash = content_hash.finalize()
+
+    public_key.verify(
+    signature,
+    message_hash,
+    padding.PSS(
+        mgf=padding.MGF1(hashes.SHA256()),
+        salt_length=padding.PSS.MAX_LENGTH
+    ),
+    hashes.SHA256())
+
+def encryp_message(public_key, message):
+    ciphertext = public_key.encrypt(message,
+        padding.OAEP(
+        mgf=padding.MGF1(algorithm=hashes.SHA256()),
+        algorithm=hashes.SHA256(),
+        label=None
+    ))
+    return ciphertext
+
+def decrypt_message(private_key, ciphertext):
+    plaintext = private_key.decrypt(
+    ciphertext,
+    padding.OAEP(
+        mgf=padding.MGF1(algorithm=hashes.SHA256()),
+        algorithm=hashes.SHA256(),
+        label=None
+    ))
+    return plaintext
