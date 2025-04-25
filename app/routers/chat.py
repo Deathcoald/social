@@ -46,8 +46,10 @@ async def websocket_endpoint(websocket: WebSocket, token: str, db: Session = Dep
                         "content": decrypted_content_str,
                         "created_at": str(new_message.created_at),
                     })
-                except:
-                    print("WARNING!!!")
+                except Exception as e:
+                    print(f"Error verifying signature or decrypting message: {e}")
+                    
+                    await websocket.send_json({"error": "Message verification failed."})
 
     except Exception as e:
         print("WebSocket auth failed:", str(e))
