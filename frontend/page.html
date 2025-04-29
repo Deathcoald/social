@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Чат с авторизацией и WebSocket</title>
+    <style>
+        #messages {
+            border: 1px solid #ccc;
+            height: 400px; /* Увеличена высота */
+            width: 100%;  /* Чтобы окно заполнило всю доступную ширину */
+            max-width: 800px; /* Ограничиваем максимальную ширину */
+            margin: 0 auto;  /* Центрируем окно */
+            overflow-y: scroll;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #messages div {
+            margin: 5px 0;
+            padding: 6px 10px;
+            border-radius: 10px;
+            max-width: 75%;
+            word-wrap: break-word;
+        }
+
+        .incoming {
+            background-color: #f0f0f0;
+            align-self: flex-start;
+        }
+
+        .outgoing {
+            background-color: #d0f0d0;
+            align-self: flex-end;
+        }
+    </style>
+</head>
+<body>
+    <!-- Этап 1: Авторизация -->
+    <div id="login-form">
+        <h2>Вход</h2>
+        <label>Email:</label><br>
+        <input type="text" id="email"><br><br>
+        <label>Пароль:</label><br>
+        <input type="password" id="password"><br><br>
+        <button onclick="login()">Войти</button>
+    </div>
+
+    <!-- Этап 2: Выбор получателя -->
+    <div id="select-receiver" style="display:none;">
+        <h2>Выбор получателя</h2>
+        <label>receiver_id:</label><br>
+        <input type="text" id="receiver_id"><br><br>
+        <button onclick="selectReceiver()">Начать чат</button>
+    </div>
+
+    <!-- Этап 3: Чат -->
+    <div id="chat" style="display:none;">
+        <h2>Чат</h2>
+        <div id="messages"></div><br>
+        <input type="text" id="message_content" placeholder="Введите сообщение">
+        <button onclick="sendMessage()">Отправить</button>
+    </div>
+
+    <script>
+        let socket;
+        let accessToken = "";
+        let userPassword = "";
+        let selectedReceiverId = null;
+        let currentUserId = null;
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            if (!email || !password) {
+                alert('Введите Email и Пароль!');
+                return;
+            }
+
+            try {
+                const formData = new URLSearchParams();
+                formData.append('username', email);
+                formData.append('password', password);
+
+                const response = await fetch('http://localhost:8000/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: formData
+                });
+
+                if (!response.ok) throw new Error('Ошибка авторизации');
+
+                const data = await response.json();
+                accessToken = data.access_token;
+                userPassword = password;
+
+                const payload = JSON.parse(atob(accessToken.split('.')[1]));
+                currentUserId = payload.user_id;
+
+                connectWebSocket();
+            } catch (err) {
+                alert("Ошибка входа: " + err.message);
+            }
+        }
+
+        function connectWebSocket() {
+            socket = new WebSocket(`ws://localhost:8000/ws/chat?token=${encodeURIComponent(accessToken)}&password=${encodeURIComponent(userPassword)}`);
+
+            socket.onopen = () => {
+                document.getElementById('login-form').style.display = 'none';
+                document.getElementById('select-receiver').style.display = 'block';
+            };
+
+            socket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                const div = document.createElement('div');
+
+                if (data.sender_id === currentUserId) {
+                    div.className = 'outgoing';
+                    div.textContent = `Вы: ${data.content} (${data.created_at})`;
+                } else {
+                    div.className = 'incoming';
+                    div.textContent = `От ${data.sender_id}: ${data.content} (${data.created_at})`;
+                }
+
+                document.getElementById('messages').appendChild(div);
+                document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+            };
+
+            socket.onerror = () => alert("Ошибка WebSocket!");
+            socket.onclose = () => {
+                document.getElementById('login-form').style.display = 'block';
+                document.getElementById('select-receiver').style.display = 'none';
+                document.getElementById('chat').style.display = 'none';
+            };
+        }
+
+        function selectReceiver() {
+            const receiverIdInput = document.getElementById('receiver_id').value;
+            if (!receiverIdInput) {
+                alert('Введите receiver_id!');
+                return;
+            }
+
+            selectedReceiverId = parseInt(receiverIdInput);
+            socket.send(JSON.stringify({ receiver_id: selectedReceiverId }));
+
+            document.getElementById('select-receiver').style.display = 'none';
+            document.getElementById('chat').style.display = 'block';
+        }
+
+        function sendMessage() {
+            const content = document.getElementById('message_content').value;
+            if (!content) {
+                alert('Введите сообщение!');
+                return;
+            }
+
+            const message = {
+                receiver_id: selectedReceiverId,
+                content: content
+            };
+
+            socket.send(JSON.stringify(message));
+
+            const div = document.createElement('div');
+            const now = new Date().toLocaleString();
+            div.textContent = `Вы: ${content} (${now})`;
+            div.className = 'outgoing';
+            document.getElementById('messages').appendChild(div);
+            document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+
+            document.getElementById('message_content').value = '';
+        }
+    </script>
+</body>
+</html>

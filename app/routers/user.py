@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Response, status, HTTPException, Depends, APIRouter
 from sqlalchemy.orm import Session
-from .. import models, schemas, utils, oauth2
+from .. import models, oauth2, schemas, utils, RSA
 from ..database import get_db
 
 
@@ -15,7 +15,7 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
 
     #hash the password - user.password
     hashed_password = utils.hash(user.password)
-    user.private_key, user.public_key = oauth2.generate_keys(user.password)
+    user.private_key, user.public_key = RSA.generate_keys(user.password)
     user.password = hashed_password
     
     new_user = models.User(**user.dict())
