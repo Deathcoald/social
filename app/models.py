@@ -21,7 +21,6 @@ class User(Base):
     id = Column(Integer, primary_key=True, nullable=False)
     email = Column(String, nullable=False, unique=True)
     password = Column(String, nullable=False)
-    private_key = Column(String, nullable=False)
     public_key = Column(String, nullable=False)
 
 class Vote(Base):
@@ -39,7 +38,6 @@ class Messages(Base):
     sender_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     receiver_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     content = Column(Text, nullable=False)
-    signature = Column(Text, nullable=False)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text('now()'))
     is_read = Column(Boolean, default=False, nullable=False)
 

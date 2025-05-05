@@ -1,178 +1,117 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <title>Чат с авторизацией и WebSocket</title>
-    <style>
-        #messages {
-            border: 1px solid #ccc;
-            height: 400px; /* Увеличена высота */
-            width: 100%;  /* Чтобы окно заполнило всю доступную ширину */
-            max-width: 800px; /* Ограничиваем максимальную ширину */
-            margin: 0 auto;  /* Центрируем окно */
-            overflow-y: scroll;
-            padding: 10px;
-            display: flex;
-            flex-direction: column;
-        }
+// Файл: src/api/auth.ts
+import axios from 'axios';
 
-        #messages div {
-            margin: 5px 0;
-            padding: 6px 10px;
-            border-radius: 10px;
-            max-width: 75%;
-            word-wrap: break-word;
-        }
+const API_URL = 'http://localhost:8000';
 
-        .incoming {
-            background-color: #f0f0f0;
-            align-self: flex-start;
-        }
+export const login = async (email: string, password: string) => {
+  const res = await axios.post(`${API_URL}/login`, { username: email, password });
+  localStorage.setItem('token', res.data.access_token);
+};
 
-        .outgoing {
-            background-color: #d0f0d0;
-            align-self: flex-end;
-        }
-    </style>
-</head>
-<body>
-    <!-- Этап 1: Авторизация -->
-    <div id="login-form">
-        <h2>Вход</h2>
-        <label>Email:</label><br>
-        <input type="text" id="email"><br><br>
-        <label>Пароль:</label><br>
-        <input type="password" id="password"><br><br>
-        <button onclick="login()">Войти</button>
+export const register = async (email: string, password: string) => {
+  const { generateKeyPair } = await import('../crypto/rsa');
+  const { publicKey, privateKey } = await generateKeyPair(password);
+  const res = await axios.post(`${API_URL}/register`, {
+    email,
+    password,
+    public_key: publicKey,
+  });
+  localStorage.setItem('privateKey', privateKey);
+  return res.data;
+};
+
+export const getCurrentUser = async () => {
+  const token = localStorage.getItem('token');
+  const res = await axios.get(`${API_URL}/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.data;
+};
+
+// Файл: src/crypto/rsa.ts
+export const generateKeyPair = async (password: string) => {
+  const subtle = window.crypto.subtle;
+  const keyPair = await subtle.generateKey({
+    name: 'RSA-OAEP',
+    modulusLength: 2048,
+    publicExponent: new Uint8Array([1, 0, 1]),
+    hash: 'SHA-256'
+  }, true, ['encrypt', 'decrypt']);
+
+  const publicKey = await subtle.exportKey('spki', keyPair.publicKey);
+  const privateKey = await subtle.exportKey('pkcs8', keyPair.privateKey);
+
+  const exportedPublicKey = btoa(String.fromCharCode(...new Uint8Array(publicKey)));
+  const exportedPrivateKey = btoa(String.fromCharCode(...new Uint8Array(privateKey)));
+
+  // Шифруем приватный ключ паролем (можно использовать AES)
+  // Упрощённо: сохраняем как есть
+
+  return {
+    publicKey: exportedPublicKey,
+    privateKey: exportedPrivateKey
+  };
+};
+
+// Файл: src/crypto/aes.ts
+export const generateAESKey = async () => {
+  const key = await window.crypto.subtle.generateKey(
+    { name: 'AES-CBC', length: 256 },
+    true,
+    ['encrypt', 'decrypt']
+  );
+  const exportedKey = await window.crypto.subtle.exportKey('raw', key);
+  return new Uint8Array(exportedKey);
+};
+
+// Файл: src/pages/Login.tsx
+import { useState } from 'react';
+import { login } from '../api/auth';
+
+export default function Login() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleLogin = async () => {
+    try {
+      await login(email, password);
+      alert('Logged in');
+    } catch (e) {
+      alert('Error');
+    }
+  };
+
+  return (
+    <div>
+      <input placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
+      <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} />
+      <button onClick={handleLogin}>Login</button>
     </div>
+  );
+}
 
-    <!-- Этап 2: Выбор получателя -->
-    <div id="select-receiver" style="display:none;">
-        <h2>Выбор получателя</h2>
-        <label>receiver_id:</label><br>
-        <input type="text" id="receiver_id"><br><br>
-        <button onclick="selectReceiver()">Начать чат</button>
+// Файл: src/pages/Register.tsx
+import { useState } from 'react';
+import { register } from '../api/auth';
+
+export default function Register() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleRegister = async () => {
+    try {
+      await register(email, password);
+      alert('Registered');
+    } catch (e) {
+      alert('Error');
+    }
+  };
+
+  return (
+    <div>
+      <input placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
+      <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} />
+      <button onClick={handleRegister}>Register</button>
     </div>
-
-    <!-- Этап 3: Чат -->
-    <div id="chat" style="display:none;">
-        <h2>Чат</h2>
-        <div id="messages"></div><br>
-        <input type="text" id="message_content" placeholder="Введите сообщение">
-        <button onclick="sendMessage()">Отправить</button>
-    </div>
-
-    <script>
-        let socket;
-        let accessToken = "";
-        let userPassword = "";
-        let selectedReceiverId = null;
-        let currentUserId = null;
-
-        async function login() {
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-
-            if (!email || !password) {
-                alert('Введите Email и Пароль!');
-                return;
-            }
-
-            try {
-                const formData = new URLSearchParams();
-                formData.append('username', email);
-                formData.append('password', password);
-
-                const response = await fetch('http://localhost:8000/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: formData
-                });
-
-                if (!response.ok) throw new Error('Ошибка авторизации');
-
-                const data = await response.json();
-                accessToken = data.access_token;
-                userPassword = password;
-
-                const payload = JSON.parse(atob(accessToken.split('.')[1]));
-                currentUserId = payload.user_id;
-
-                connectWebSocket();
-            } catch (err) {
-                alert("Ошибка входа: " + err.message);
-            }
-        }
-
-        function connectWebSocket() {
-            socket = new WebSocket(`ws://localhost:8000/ws/chat?token=${encodeURIComponent(accessToken)}&password=${encodeURIComponent(userPassword)}`);
-
-            socket.onopen = () => {
-                document.getElementById('login-form').style.display = 'none';
-                document.getElementById('select-receiver').style.display = 'block';
-            };
-
-            socket.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                const div = document.createElement('div');
-
-                if (data.sender_id === currentUserId) {
-                    div.className = 'outgoing';
-                    div.textContent = `Вы: ${data.content} (${data.created_at})`;
-                } else {
-                    div.className = 'incoming';
-                    div.textContent = `От ${data.sender_id}: ${data.content} (${data.created_at})`;
-                }
-
-                document.getElementById('messages').appendChild(div);
-                document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
-            };
-
-            socket.onerror = () => alert("Ошибка WebSocket!");
-            socket.onclose = () => {
-                document.getElementById('login-form').style.display = 'block';
-                document.getElementById('select-receiver').style.display = 'none';
-                document.getElementById('chat').style.display = 'none';
-            };
-        }
-
-        function selectReceiver() {
-            const receiverIdInput = document.getElementById('receiver_id').value;
-            if (!receiverIdInput) {
-                alert('Введите receiver_id!');
-                return;
-            }
-
-            selectedReceiverId = parseInt(receiverIdInput);
-            socket.send(JSON.stringify({ receiver_id: selectedReceiverId }));
-
-            document.getElementById('select-receiver').style.display = 'none';
-            document.getElementById('chat').style.display = 'block';
-        }
-
-        function sendMessage() {
-            const content = document.getElementById('message_content').value;
-            if (!content) {
-                alert('Введите сообщение!');
-                return;
-            }
-
-            const message = {
-                receiver_id: selectedReceiverId,
-                content: content
-            };
-
-            socket.send(JSON.stringify(message));
-
-            const div = document.createElement('div');
-            const now = new Date().toLocaleString();
-            div.textContent = `Вы: ${content} (${now})`;
-            div.className = 'outgoing';
-            document.getElementById('messages').appendChild(div);
-            document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
-
-            document.getElementById('message_content').value = '';
-        }
-    </script>
-</body>
-</html>
+  );
+}

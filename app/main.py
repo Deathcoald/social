@@ -15,6 +15,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -25,10 +26,3 @@ app.include_router(auth.router)
 app.include_router(vote.router)
 app.include_router(chat.router)
 
-@app.get("/", response_class=HTMLResponse)
-def serve_index():
-    html_path = Path(r"D:\FastAPI\frontend/page.html")  
-    if html_path.exists():
-        return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
-    else:
-        return HTMLResponse(content="File not found", status_code=404)

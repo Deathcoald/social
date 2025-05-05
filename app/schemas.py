@@ -32,8 +32,7 @@ class PostOut(BaseModel):
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
-    private_key : str | None = None
-    public_key : str | None = None
+    public_key : str 
 
 class UserOut(BaseModel):
     id: int

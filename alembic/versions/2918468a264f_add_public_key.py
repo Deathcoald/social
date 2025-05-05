@@ -17,14 +17,11 @@ down_revision: Union[str, None] = '0048710630a1'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-
 def upgrade() -> None:
     op.add_column('users', sa.Column('public_key', sa.Text(), nullable=False))
-    op.add_column('users', sa.Column('private_key', sa.Text(), nullable=False))
     pass
 
 
 def downgrade() -> None:
     op.drop_column('users', 'public_key')
-    op.drop_column('users', 'private_key')
     pass
