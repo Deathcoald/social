@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { jwtDecode } from "jwt-decode";
 import { JwtPayload } from 'jwt-decode';
+import '../styles/Chat.css';
 import {
   aesEncrypt,
   aesDecrypt,
@@ -21,15 +22,14 @@ export default function Chat() {
   const [token, setToken] = useState(localStorage.getItem('token') || '');
   const [aesKey, setAesKey] = useState<CryptoKey | null>(null);
 
-  
-const getUserIdFromToken = (token: string): number | null => {
-  try {
-    const decoded = jwtDecode<JwtPayload>(token);
-    return decoded && 'user_id' in decoded ? (decoded as any).user_id : null;
-  } catch {
-    return null;
-  }
-};
+  const getUserIdFromToken = (token: string): number | null => {
+    try {
+      const decoded = jwtDecode<JwtPayload>(token);
+      return decoded && 'user_id' in decoded ? (decoded as any).user_id : null;
+    } catch {
+      return null;
+    }
+  };
 
   const currentUserId = getUserIdFromToken(token);
 
@@ -59,19 +59,54 @@ const getUserIdFromToken = (token: string): number | null => {
   }, [receiverId]);
 
   useEffect(() => {
+    const fetchHistory = async () => {
+      if (!token || !receiverId || !aesKey) return;
+
+      try {
+        const response = await fetch(`http://localhost:8000/chat/history/${receiverId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const data = await response.json();
+        const decryptedMessages: ChatMessage[] = [];
+
+        for (const msg of data) {
+          try {
+            const decryptedContent = await aesDecrypt(msg.content, aesKey);
+            decryptedMessages.push({
+              senderId: msg.sender_id,
+              content: decryptedContent,
+            });
+          } catch (err) {
+            console.error("Ошибка расшифровки истории сообщения:", err);
+          }
+        }
+
+        setMessages(decryptedMessages);
+      } catch (err) {
+        console.error("Ошибка загрузки истории сообщений:", err);
+      }
+    };
+
+    fetchHistory();
+  }, [token, receiverId, aesKey]);
+
+  useEffect(() => {
     if (!token || !receiverId || !aesKey) return;
 
     const protocol = window.location.protocol === "https:" ? "wss" : "ws";
     const socket = new WebSocket(`${protocol}://localhost:8000/ws/chat?token=${token}`);
 
     socket.onopen = () => {
-      console.log("✅ WebSocket открыт");
+      console.log("WebSocket открыт");
       setWs(socket);
     };
 
     socket.onmessage = async (event) => {
       const data = JSON.parse(event.data);
-      console.log("📩 Получено сообщение:", data);
+      console.log("Получено сообщение:", data);
 
       if (data.content && aesKey) {
         try {
@@ -87,7 +122,7 @@ const getUserIdFromToken = (token: string): number | null => {
     };
 
     socket.onclose = () => {
-      console.log("❌ WebSocket закрыт");
+      console.log("WebSocket закрыт");
     };
 
     socket.onerror = (e) => {
@@ -123,47 +158,32 @@ const getUserIdFromToken = (token: string): number | null => {
   };
 
   return (
-    <div>
-      <h2>Chat with {receiverId}</h2>
-
-      <div
-        style={{
-          height: '400px',
-          overflowY: 'auto',
-          border: '1px solid #ccc',
-          padding: '10px',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
+    <div className="chat-container">
+      <h2 className="chat-header">Chat with {receiverId}</h2>
+  
+      <div className="chat-messages">
         {messages.map((msg, index) => (
           <div
             key={index}
-            style={{
-              background: msg.senderId === currentUserId ? '#d1ffd1' : '#f1f1f1',
-              alignSelf: msg.senderId === currentUserId ? 'flex-end' : 'flex-start',
-              padding: '8px',
-              margin: '5px 0',
-              borderRadius: '6px',
-              maxWidth: '70%',
-              wordWrap: 'break-word',
-            }}
+            className={`chat-message ${msg.senderId === currentUserId ? 'user' : 'other'}`}
           >
             {msg.content}
           </div>
         ))}
       </div>
-
-      <input
-        type="text"
-        value={message}
-        onChange={(e) => setMessage(e.target.value)}
-        placeholder="Type a message"
-        style={{ width: '80%', marginRight: '10px' }}
-      />
-      <button onClick={handleSendMessage} disabled={!aesKey || !message.trim()}>
-        Send
-      </button>
+  
+      <div className="chat-input-container">
+        <input
+          type="text"
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          placeholder="Type a message"
+        />
+        <button onClick={handleSendMessage} disabled={!aesKey || !message.trim()}>
+          Send
+        </button>
+      </div>
     </div>
   );
+  
 }

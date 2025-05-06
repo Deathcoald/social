@@ -22,12 +22,11 @@ async def websocket_endpoint(
         await websocket.accept()
         active_connections[user.id] = websocket
 
-        print("✅ WebSocket соединение установлено.")
+        print("WebSocket соединение установлено.")
 
         while True:
-            print("kashira")
             data = await websocket.receive_json()
-            print(f"📥 Получено сообщение: {data}")
+            print(f"Получено сообщение: {data}")
 
             receiver_id = int(data.get("receiver_id"))
             content = data.get("content")
@@ -47,7 +46,7 @@ async def websocket_endpoint(
             print(active_connections)
 
             if receiver_id in active_connections:
-                print(f"📤 Отправляем сообщение {content} пользователю {receiver_id}")
+                print(f"Отправляем сообщение {content} пользователю {receiver_id}")
                 await active_connections[receiver_id].send_json({
                     "sender_id": user.id,
                     "receiver_id": receiver_id,
@@ -107,3 +106,30 @@ def init_chat(
             "sender_aes_key": new_user_key.sender_aes_key,
             "receiver_aes_key": new_user_key.receiver_aes_key
         }
+
+@router.get("/chat/history/{receiver_id}")
+def get_chat_history(
+    receiver_id: int,
+    request: Request,
+    db: Session = Depends(database.get_db),
+):
+    token = request.headers.get("Authorization")
+    if not token:
+        raise HTTPException(status_code=401, detail="Token missing")
+
+    user = oauth2.authenticate_ws_user(token.split(" ")[1], db)
+
+    messages = db.query(models.Messages).filter(
+        ((models.Messages.sender_id == user.id) & (models.Messages.receiver_id == receiver_id)) |
+        ((models.Messages.sender_id == receiver_id) & (models.Messages.receiver_id == user.id))
+    ).order_by(models.Messages.created_at.asc()).all()
+
+    return [
+        {
+            "sender_id": msg.sender_id,
+            "receiver_id": msg.receiver_id,
+            "content": msg.content,
+            "created_at": str(msg.created_at),
+        }
+        for msg in messages
+    ]
