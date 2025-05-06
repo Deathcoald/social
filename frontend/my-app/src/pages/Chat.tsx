@@ -3,6 +3,8 @@ import { useParams } from 'react-router-dom';
 import { jwtDecode } from "jwt-decode";
 import { JwtPayload } from 'jwt-decode';
 import '../styles/Chat.css';
+import FileUpload from './FileUpload';
+
 import {
   aesEncrypt,
   aesDecrypt,
@@ -13,6 +15,10 @@ type ChatMessage = {
   senderId: number;
   content: string;
 };
+
+function isImage(url: string): boolean {
+  return /\.(jpg|jpeg|png|gif|webp)$/i.test(url);
+}
 
 export default function Chat() {
   const { receiverId } = useParams();
@@ -162,14 +168,33 @@ export default function Chat() {
       <h2 className="chat-header">Chat with {receiverId}</h2>
   
       <div className="chat-messages">
-        {messages.map((msg, index) => (
-          <div
-            key={index}
-            className={`chat-message ${msg.senderId === currentUserId ? 'user' : 'other'}`}
-          >
-            {msg.content}
-          </div>
-        ))}
+      {messages.map((msg, index) => (
+  <div
+    key={index}
+    className={`chat-message ${msg.senderId === currentUserId ? 'user' : 'other'}`}
+  >
+    {msg.content.startsWith('📎 Файл: ') ? (
+      isImage(msg.content.replace('📎 Файл: ', '')) ? (
+        <img
+          src={msg.content.replace('📎 Файл: ', '')}
+          alt="uploaded"
+          className="chat-image"
+        />
+      ) : (
+        <a
+          href={msg.content.replace('📎 Файл: ', '')}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          📎 Скачать файл
+        </a>
+      )
+    ) : (
+      msg.content
+    )}
+  </div>
+))}
+
       </div>
   
       <div className="chat-input-container">
@@ -179,10 +204,17 @@ export default function Chat() {
           onChange={(e) => setMessage(e.target.value)}
           placeholder="Type a message"
         />
+        
+          <FileUpload onUpload={(url) => {
+            const msg = `📎 Файл: ${url}`;
+            setMessage(msg);
+          }} />
+
         <button onClick={handleSendMessage} disabled={!aesKey || !message.trim()}>
           Send
         </button>
       </div>
+
     </div>
   );
   
