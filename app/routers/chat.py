@@ -60,10 +60,9 @@ async def websocket_endpoint(
         await websocket.close(code=1008)
 
 
-
-@router.get("/chat/init/{receiver_id}")
+@router.get("/chat/init/{username}")
 def init_chat(
-    receiver_id: int,
+    username: str,
     request: Request,
     db: Session = Depends(database.get_db),
 ):
@@ -73,17 +72,21 @@ def init_chat(
 
     user = oauth2.authenticate_ws_user(token.split(" ")[1], db)
 
-    receiver = db.query(models.User).filter(models.User.id == receiver_id).first()
+    receiver = db.query(models.User).filter(models.User.email == username).first()
     if not receiver or not receiver.public_key:
         raise HTTPException(status_code=404, detail="Receiver not found")
 
     user_key = db.query(models.UserKey).filter(
-        ((models.UserKey.sender_id == user.id) & (models.UserKey.receiver_id == receiver_id)) |
-        ((models.UserKey.sender_id == receiver_id) & (models.UserKey.receiver_id == user.id))
+        ((models.UserKey.sender_id == user.id) & (models.UserKey.receiver_id == receiver.id)) |
+        ((models.UserKey.sender_id == receiver.id) & (models.UserKey.receiver_id == user.id))
     ).first()
+
+    print(receiver.id)
 
     if user_key:
         return {
+            "receiver_username": receiver.email.split("@")[0],
+            "receiver_id": receiver.id,
             "sender_aes_key": user_key.sender_aes_key,
             "receiver_aes_key": user_key.receiver_aes_key
         }
@@ -95,7 +98,7 @@ def init_chat(
 
         new_user_key = models.UserKey(
                 sender_id=user.id,
-                receiver_id=receiver_id,
+                receiver_id=int(receiver.id),
                 sender_aes_key=base64.b64encode(sender_aes_key).decode(),
                 receiver_aes_key = base64.b64encode(receiver_aes_key).decode()
             )
@@ -103,6 +106,8 @@ def init_chat(
         db.commit()
 
         return {
+            "receiver_username": receiver.email.split("@")[0],
+            "receiver_id": int(receiver.id),
             "sender_aes_key": new_user_key.sender_aes_key,
             "receiver_aes_key": new_user_key.receiver_aes_key
         }

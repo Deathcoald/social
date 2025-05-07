@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom'; // ← добавлено useNavigate
 import { jwtDecode } from "jwt-decode";
 import { JwtPayload } from 'jwt-decode';
 import '../styles/Chat.css';
@@ -21,12 +21,14 @@ function isImage(url: string): boolean {
 }
 
 export default function Chat() {
-  const { receiverId } = useParams();
+  const { receiverId, receiverName } = useParams();
+  const decodedReceiverName = receiverName ? decodeURIComponent(receiverName) : '';
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [message, setMessage] = useState('');
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [token, setToken] = useState(localStorage.getItem('token') || '');
   const [aesKey, setAesKey] = useState<CryptoKey | null>(null);
+  const navigate = useNavigate(); // ← добавлено
 
   const getUserIdFromToken = (token: string): number | null => {
     try {
@@ -165,38 +167,44 @@ export default function Chat() {
 
   return (
     <div className="chat-container">
-      <h2 className="chat-header">Chat with {receiverId}</h2>
-  
-      <div className="chat-messages">
-      {messages.map((msg, index) => (
-  <div
-    key={index}
-    className={`chat-message ${msg.senderId === currentUserId ? 'user' : 'other'}`}
-  >
-    {msg.content.startsWith('📎 Файл: ') ? (
-      isImage(msg.content.replace('📎 Файл: ', '')) ? (
-        <img
-          src={msg.content.replace('📎 Файл: ', '')}
-          alt="uploaded"
-          className="chat-image"
-        />
-      ) : (
-        <a
-          href={msg.content.replace('📎 Файл: ', '')}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          📎 Скачать файл
-        </a>
-      )
-    ) : (
-      msg.content
-    )}
-  </div>
-))}
+      <h2 className="chat-header">Chat with {decodedReceiverName}</h2>
 
+      <button
+        onClick={() => navigate(`/profile/${receiverId}`)}
+        className="chat-profile-button"
+      >
+        Открыть профиль
+      </button>
+
+      <div className="chat-messages">
+        {messages.map((msg, index) => (
+          <div
+            key={index}
+            className={`chat-message ${msg.senderId === currentUserId ? 'user' : 'other'}`}
+          >
+            {msg.content.startsWith('📎 Файл: ') ? (
+              isImage(msg.content.replace('📎 Файл: ', '')) ? (
+                <img
+                  src={msg.content.replace('📎 Файл: ', '')}
+                  alt="uploaded"
+                  className="chat-image"
+                />
+              ) : (
+                <a
+                  href={msg.content.replace('📎 Файл: ', '')}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  📎 Скачать файл
+                </a>
+              )
+            ) : (
+              msg.content
+            )}
+          </div>
+        ))}
       </div>
-  
+
       <div className="chat-input-container">
         <input
           type="text"
@@ -204,18 +212,16 @@ export default function Chat() {
           onChange={(e) => setMessage(e.target.value)}
           placeholder="Type a message"
         />
-        
-          <FileUpload onUpload={(url) => {
-            const msg = `📎 Файл: ${url}`;
-            setMessage(msg);
-          }} />
+
+        <FileUpload onUpload={(url) => {
+          const msg = `📎 Файл: ${url}`;
+          setMessage(msg);
+        }} />
 
         <button onClick={handleSendMessage} disabled={!aesKey || !message.trim()}>
           Send
         </button>
       </div>
-
     </div>
   );
-  
 }

@@ -1,11 +1,10 @@
-// src/pages/ChatInit.tsx
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import '../styles/ChatInit.css';
 import { jwtDecode } from 'jwt-decode';
 
 export default function ChatInit() {
-  const [receiverId, setReceiverId] = useState('');
+  const [username, setUsername] = useState('');
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
@@ -20,9 +19,9 @@ export default function ChatInit() {
 
   const handleStartChat = async () => {
     setError('');
-    
-    if (!receiverId) {
-      setError("Введите ID получателя");
+
+    if (!username) {
+      setError("Введите имя пользователя или email");
       return;
     }
 
@@ -32,14 +31,8 @@ export default function ChatInit() {
       return;
     }
 
-    const currentUserId = getUserIdFromToken(token);
-    if (String(currentUserId) === receiverId) {
-      setError("Нельзя начать чат с самим собой");
-      return;
-    }
-
     try {
-      const response = await fetch(`http://localhost:8000/chat/init/${receiverId}`, {
+      const response = await fetch(`http://localhost:8000/chat/init/${username+"@gmail.com"}`, {
         method: "GET",
         headers: {
           "Authorization": `Bearer ${token}`
@@ -53,10 +46,15 @@ export default function ChatInit() {
       }
 
       const data = await response.json();
+
+      const receiver_id = data.receiver_id;
+      const receiver_name = data.receiver_username;
+
       localStorage.setItem("chatAesKeyEncrypted", data.sender_aes_key);
       localStorage.setItem("chatAesKeyForReceiver", data.receiver_aes_key);
 
-      navigate(`/chat/${receiverId}`);
+      navigate(`/chat/${receiver_id}/${encodeURIComponent(receiver_name)}`);
+
     } catch (err) {
       console.error("Ошибка при инициализации чата:", err);
       setError("Не удалось создать или получить чат");
@@ -69,9 +67,9 @@ export default function ChatInit() {
         <h2>Начать чат</h2>
         <input
           type="text"
-          placeholder="Введите ID получателя"
-          value={receiverId}
-          onChange={(e) => setReceiverId(e.target.value)}
+          placeholder="Введите имя пользователя"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
         />
         {error && <p className="chat-init-error">{error}</p>}
         <button onClick={handleStartChat}>Начать</button>

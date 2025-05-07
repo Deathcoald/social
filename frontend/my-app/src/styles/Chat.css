@@ -60,4 +60,19 @@
     max-height: 200px;
     border-radius: 8px;
   }
+  .chat-profile-button {
+    margin-bottom: 1rem;
+    padding: 8px 16px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  
+  .chat-profile-button:hover {
+    background-color: #0056b3;
+  }
+  
   

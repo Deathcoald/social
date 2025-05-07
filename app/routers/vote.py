@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 from .. import oauth2, schemas, database, models
 
 router = APIRouter(
-    prefix="/vote",
-    tags=["Vote"]
+    prefix="/votes",
+    tags=["Votes"]
 )
 
 @router.post("/", status_code=status.HTTP_201_CREATED)

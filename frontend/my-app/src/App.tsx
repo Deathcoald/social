@@ -4,6 +4,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import ChatInit from './pages/ChatInit';
 import Chat from './pages/Chat'; 
+import ProfilePage from './pages/ProfilePages';
 
 export default function App() {
   return (
@@ -12,7 +13,8 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<Register />} />
         <Route path="/chat-init" element={<ChatInit />} />
-        <Route path="/chat/:receiverId" element={<Chat />} /> {/* Добавляем новый маршрут для чата */}
+        <Route path="/chat/:receiverId/:receiverName" element={<Chat />} />
+        <Route path="/profile/:userId" element={<ProfilePage />} />
       </Routes>
     </BrowserRouter>
   );
