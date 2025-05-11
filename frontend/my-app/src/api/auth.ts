@@ -3,17 +3,19 @@ import axios from 'axios';
 
 const API_URL = 'http://localhost:8000';
 
-export const login = async (email: string, password: string) => {
+export const login = async (username: string, password: string) => {
   const res = await axios.post(
     `${API_URL}/login`,
     new URLSearchParams({
-      username: email,
+      username: username,
       password: password,
     }),
     { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
   );
   console.log('token', res.data.access_token)
+  
   localStorage.setItem('token', res.data.access_token);
+  sessionStorage.setItem("currentUsername", username);
 };
 
 
@@ -26,26 +28,26 @@ export const getCurrentUser = async () => {
 };
 
 
-export const register = async (email: string, password: string) => {
+export const register = async (username: string, password: string) => {
   const { generateEncryptionKeys } = await import('../crypto/rsa');
 
   const { encryptionPublicKey, encryptionPrivateKey } = await generateEncryptionKeys();
 
   console.log("Sending registration data:", {
-    email,
+    username,
     password,
     encryption_public_key: encryptionPublicKey,
   });
 
   const res = await axios.post(`${API_URL}/users/`, {
-    email,
+    username,
     password,
     public_key: encryptionPublicKey,
   });
 
   console.log("Server response:", res.data);
 
-  localStorage.setItem('encryptionPrivateKey', encryptionPrivateKey);
+   localStorage.setItem(`encrypyionPrivateKey-${username}`, encryptionPrivateKey);
 
   return res.data;
 };

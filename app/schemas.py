@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
 from pydantic.types import conint
@@ -30,19 +30,19 @@ class PostOut(BaseModel):
         orm_model = True
 
 class UserCreate(BaseModel):
-    email: EmailStr
+    username: str
     password: str
     public_key : str 
 
 class UserOut(BaseModel):
     id: int
-    email: EmailStr
+    username: str
 
     class Config:
         orm_model = True
 
 class UserLogin(BaseModel):
-    email: EmailStr
+    username: str
     password: str
 
 class Token(BaseModel):
@@ -63,6 +63,9 @@ class Vote(BaseModel):
 class Send_message(BaseModel):
     sender_id : int
     receiver_id : int
+    content : str
+
+class Update_message(BaseModel):
     content : str
 
 class Out_message(BaseModel):

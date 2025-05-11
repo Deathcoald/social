@@ -18,48 +18,61 @@ export default function ChatInit() {
   };
 
   const handleStartChat = async () => {
-    setError('');
+  setError('');
 
-    if (!username) {
-      setError("Введите имя пользователя или email");
-      return;
-    }
+  if (!username) {
+    setError("Введите имя пользователя или email");
+    return;
+  }
 
-    const token = localStorage.getItem("token");
-    if (!token) {
-      setError("Вы не авторизованы");
-      return;
-    }
+  const token = localStorage.getItem("token");
+  if (!token) {
+    setError("Вы не авторизованы");
+    return;
+  }
 
-    try {
-      const response = await fetch(`http://localhost:8000/chat/init/${username+"@gmail.com"}`, {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${token}`
-        }
-      });
+  const currentUserId = getUserIdFromToken(token);
+  if (!currentUserId) {
+    setError("Невалидный токен");
+    return;
+  }
 
-      if (!response.ok) {
-        console.error("Ошибка при инициализации чата");
-        setError("Не удалось создать или получить чат");
-        return;
+  try {
+    const response = await fetch(`http://localhost:8000/chat/init/${username}`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${token}`
       }
+    });
 
-      const data = await response.json();
-
-      const receiver_id = data.receiver_id;
-      const receiver_name = data.receiver_username;
-
-      localStorage.setItem("chatAesKeyEncrypted", data.sender_aes_key);
-      localStorage.setItem("chatAesKeyForReceiver", data.receiver_aes_key);
-
-      navigate(`/chat/${receiver_id}/${encodeURIComponent(receiver_name)}`);
-
-    } catch (err) {
-      console.error("Ошибка при инициализации чата:", err);
+    if (!response.ok) {
+      console.error("Ошибка при инициализации чата");
       setError("Не удалось создать или получить чат");
+      return;
     }
-  };
+
+    const data = await response.json();
+
+    const receiver_id = data.receiver_id;
+    const user_id = data.sender_id;
+    const receiver_name = data.receiver_username;
+
+    console.log(currentUserId)
+    console.log(receiver_id)
+    console.log(user_id)
+
+    const chatPartnerId = receiver_id === currentUserId ? data.sender_id : receiver_id;
+const encryptedKey = receiver_id === currentUserId ? data.receiver_aes_key : data.sender_aes_key;
+
+localStorage.setItem("chatAesKeyEncrypted", encryptedKey);
+navigate(`/chat/${chatPartnerId}/${encodeURIComponent(receiver_name)}`);
+
+  } catch (err) {
+    console.error("Ошибка при инициализации чата:", err);
+    setError("Не удалось создать или получить чат");
+  }
+};
+
 
   return (
     <div className="chat-init-container">

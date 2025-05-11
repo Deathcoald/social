@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import '../styles/Login.css';
 
 export default function Login() {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -13,16 +13,16 @@ export default function Login() {
   const handleLogin = async () => {
     setError('');
 
-    if (!email || !password) {
-      setError('Введите email и пароль');
+    if (!username || !password) {
+      setError('Введите username и пароль');
       return;
     }
 
     try {
-      await login(email, password);
+      await login(username, password);
       navigate('/chat-init');
     } catch (e) {
-      setError('Неверный email или пароль');
+      setError('Неверный username или пароль');
     }
   };
 
@@ -31,9 +31,9 @@ export default function Login() {
       <div className="login-box">
         <h2>Вход</h2>
         <input
-          placeholder="Email"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
+          placeholder="Username"
+          value={username}
+          onChange={e => setUsername(e.target.value)}
         />
         <input
           type="password"

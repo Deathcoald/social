@@ -1,10 +1,10 @@
 import base64
 
-from fastapi import WebSocket, APIRouter, Depends, HTTPException, Request, status
+from fastapi import WebSocket, APIRouter, Depends, HTTPException, Request, status, WebSocketDisconnect
 from sqlalchemy.orm import Session
 from typing import Dict
 
-from .. import models, database, oauth2, AES
+from .. import models, database, oauth2, AES, schemas
 
 router = APIRouter()
 active_connections: Dict[int, WebSocket] = {}
@@ -42,22 +42,65 @@ async def websocket_endpoint(
             db.add(new_message)
             db.commit()
 
-            print(f"Сообщение сохранено в базе данных для {receiver_id}. Отправка...")
-            print(active_connections)
 
             if receiver_id in active_connections:
                 print(f"Отправляем сообщение {content} пользователю {receiver_id}")
-                await active_connections[receiver_id].send_json({
-                    "sender_id": user.id,
-                    "receiver_id": receiver_id,
-                    "content": content,
-                    "created_at": str(new_message.created_at)
-                })
-                print("otpravleno")
+                try:
+                    await active_connections[receiver_id].send_json({
+                        "id": new_message.id,
+                        "sender_id": user.id,
+                        "receiver_id": receiver_id,
+                        "content": content,
+                        "created_at": str(new_message.created_at)
+                    })
+                except RuntimeError as e:
+                    print(f"Ошибка при отправке пользователю {receiver_id}: соединение закрыто.")
+                    del active_connections[receiver_id]
 
     except HTTPException as e:
         print(f"WebSocket ошибка: {e.detail}")
         await websocket.close(code=1008)
+
+
+@router.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket, token: str, db: Session = Depends(database.get_db)):
+    await websocket.accept()
+    user = oauth2.authenticate_ws_user(token, db)
+    active_connections[user.id] = websocket
+    try:
+        while True:
+            data = await websocket.receive_json()
+
+    except WebSocketDisconnect:
+        print(f"Пользователь {user.id} отключился")
+        del active_connections[user.id]
+
+
+@router.put("/chat/messages/{message_id}")
+def update_message(message_id: int, payload: schemas.Update_message, db: Session = Depends(database.get_db), current_user: models.User = Depends(oauth2.get_current_user)):
+    message = db.query(models.Messages).filter(models.Messages.id == message_id).first()
+
+    if not message or message.sender_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    message.content = payload.content
+
+    db.commit()
+    return {"status": "updated"}
+
+
+@router.delete("/chat/messages/{message_id}")
+def delete_message(message_id: int, db: Session = Depends(database.get_db), current_user: models.User = Depends(oauth2.get_current_user)):
+    message = db.query(models.Messages).filter(models.Messages.id == message_id).first()
+
+    if not message or message.sender_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    db.delete(message)
+    db.commit()
+
+    return {"status": "deleted"}
+
 
 
 @router.get("/chat/init/{username}")
@@ -72,21 +115,23 @@ def init_chat(
 
     user = oauth2.authenticate_ws_user(token.split(" ")[1], db)
 
-    receiver = db.query(models.User).filter(models.User.email == username).first()
+    receiver = db.query(models.User).filter(models.User.username == username).first()
     if not receiver or not receiver.public_key:
         raise HTTPException(status_code=404, detail="Receiver not found")
+
+    if receiver.id == user.id:
+        raise HTTPException(status_code=400, detail="Нельзя создать чат с самим собой")
 
     user_key = db.query(models.UserKey).filter(
         ((models.UserKey.sender_id == user.id) & (models.UserKey.receiver_id == receiver.id)) |
         ((models.UserKey.sender_id == receiver.id) & (models.UserKey.receiver_id == user.id))
     ).first()
 
-    print(receiver.id)
-
     if user_key:
         return {
-            "receiver_username": receiver.email.split("@")[0],
-            "receiver_id": receiver.id,
+            "sender_id": user_key.sender_id,
+            "receiver_username": receiver.username,
+            "receiver_id": user_key.receiver_id,
             "sender_aes_key": user_key.sender_aes_key,
             "receiver_aes_key": user_key.receiver_aes_key
         }
@@ -106,8 +151,9 @@ def init_chat(
         db.commit()
 
         return {
-            "receiver_username": receiver.email.split("@")[0],
-            "receiver_id": int(receiver.id),
+            "sender_id": new_user_key.sender_id,
+            "receiver_username": receiver.username,
+            "receiver_id": new_user_key.receiver_id,
             "sender_aes_key": new_user_key.sender_aes_key,
             "receiver_aes_key": new_user_key.receiver_aes_key
         }
@@ -131,6 +177,7 @@ def get_chat_history(
 
     return [
         {
+            "id": msg.id,
             "sender_id": msg.sender_id,
             "receiver_id": msg.receiver_id,
             "content": msg.content,

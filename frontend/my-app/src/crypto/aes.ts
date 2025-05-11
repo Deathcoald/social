@@ -63,12 +63,13 @@ const decryptAesKeyWithRsa = async (
 ): Promise<CryptoKey> => {
   const encryptedAesKey = Uint8Array.from(atob(encryptedAesKeyBase64), (c) => c.charCodeAt(0));
   const rsaPrivateKey = await importRsaPrivateKey(rsaPrivateKeyBase64);
-  console.log("encryptedAesKeyBase64:", encryptedAesKeyBase64);
+  console.log("encryptedAesKey:", encryptedAesKey);
+  console.log("rsaPrivateKey:", rsaPrivateKey);
 
   const rawAesKey = await subtle.decrypt(
     { name: 'RSA-OAEP' },
     rsaPrivateKey,
-    encryptedAesKey.buffer
+    encryptedAesKey
   );
   console.log("kashira")
   return await subtle.importKey(

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom'; // ← добавлено useNavigate
+import { useParams, useNavigate } from 'react-router-dom';
 import { jwtDecode } from "jwt-decode";
 import { JwtPayload } from 'jwt-decode';
 import '../styles/Chat.css';
@@ -12,8 +12,10 @@ import {
 } from '../crypto/aes';
 
 type ChatMessage = {
+  id: number;
   senderId: number;
   content: string;
+  createdAt?: string;
 };
 
 function isImage(url: string): boolean {
@@ -28,7 +30,7 @@ export default function Chat() {
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [token, setToken] = useState(localStorage.getItem('token') || '');
   const [aesKey, setAesKey] = useState<CryptoKey | null>(null);
-  const navigate = useNavigate(); // ← добавлено
+  const navigate = useNavigate();
 
   const getUserIdFromToken = (token: string): number | null => {
     try {
@@ -44,7 +46,11 @@ export default function Chat() {
   useEffect(() => {
     const initChat = async () => {
       const encryptedSenderKeyBase64 = localStorage.getItem("chatAesKeyEncrypted");
-      const privateKeyPem = localStorage.getItem("encryptionPrivateKey");
+      const username = sessionStorage.getItem("currentUsername");
+      const privateKeyPem = localStorage.getItem(`encrypyionPrivateKey-${username}`);
+      
+      console.log(encryptedSenderKeyBase64)
+      console.log(privateKeyPem)
 
       if (!encryptedSenderKeyBase64 || !privateKeyPem) {
         console.error("Не хватает данных для расшифровки AES-ключа");
@@ -53,6 +59,7 @@ export default function Chat() {
 
       try {
         const aesKey = await decryptAesKeyWithRsa(encryptedSenderKeyBase64, privateKeyPem);
+
         setAesKey(aesKey);
 
         const rawKey = await window.crypto.subtle.exportKey("raw", aesKey);
@@ -84,8 +91,10 @@ export default function Chat() {
           try {
             const decryptedContent = await aesDecrypt(msg.content, aesKey);
             decryptedMessages.push({
+              id: msg.id,
               senderId: msg.sender_id,
               content: decryptedContent,
+              createdAt: msg.created_at,
             });
           } catch (err) {
             console.error("Ошибка расшифровки истории сообщения:", err);
@@ -120,8 +129,10 @@ export default function Chat() {
         try {
           const decryptedMessage = await aesDecrypt(data.content, aesKey);
           setMessages((prev) => [...prev, {
+            id: data.id,
             senderId: data.sender_id,
             content: decryptedMessage,
+            createdAt: data.created_at,
           }]);
         } catch (error) {
           console.error("Ошибка при расшифровке сообщения:", error);
@@ -155,6 +166,7 @@ export default function Chat() {
 
       ws.send(JSON.stringify(msg));
       setMessages((prev) => [...prev, {
+        id: Date.now(),
         senderId: currentUserId ?? 0,
         content: message,
       }]);
@@ -164,6 +176,48 @@ export default function Chat() {
       console.error("Ошибка при отправке сообщения:", error);
     }
   };
+
+  const handleDelete = async (id: number) => {
+  try {
+    await fetch(`http://localhost:8000/chat/messages/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    setMessages((prev) => prev.filter((msg) => msg.id !== id));
+  } catch (err) {
+    console.error("Ошибка при удалении:", err);
+  }
+};
+
+const handleEdit = async (msg: ChatMessage) => {
+  const newText = prompt("Новое сообщение:", msg.content);
+  if (!newText) 
+    return;
+
+   if (!aesKey) {
+    console.error("AES ключ не готов");
+    return;
+  }
+
+  try {
+    const encrypted = await aesEncrypt(aesKey, newText); 
+
+    await fetch(`http://localhost:8000/chat/messages/${msg.id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ content: encrypted }),
+    });
+
+    setMessages((prev) =>
+      prev.map((m) => (m.id === msg.id ? { ...m, content: newText } : m)) 
+    );
+  } catch (err) {
+    console.error("Ошибка при редактировании:", err);
+  }
+};
 
   return (
     <div className="chat-container">
@@ -178,31 +232,45 @@ export default function Chat() {
 
       <div className="chat-messages">
         {messages.map((msg, index) => (
-          <div
-            key={index}
-            className={`chat-message ${msg.senderId === currentUserId ? 'user' : 'other'}`}
+  <div
+    key={index}
+    className={`chat-message ${msg.senderId === currentUserId ? 'user' : 'other'}`}
+  >
+    {msg.senderId === currentUserId && (
+  <div className="chat-actions">
+    <button onClick={() => handleEdit(msg)}>✏️</button>
+    <button onClick={() => handleDelete(msg.id)}>🗑️</button>
+  </div>
+)}
+
+    <div className="chat-content">
+      {msg.content.startsWith('📎 Файл: ') ? (
+        isImage(msg.content.replace('📎 Файл: ', '')) ? (
+          <img
+            src={msg.content.replace('📎 Файл: ', '')}
+            alt="uploaded"
+            className="chat-image"
+          />
+        ) : (
+          <a
+            href={msg.content.replace('📎 Файл: ', '')}
+            target="_blank"
+            rel="noopener noreferrer"
           >
-            {msg.content.startsWith('📎 Файл: ') ? (
-              isImage(msg.content.replace('📎 Файл: ', '')) ? (
-                <img
-                  src={msg.content.replace('📎 Файл: ', '')}
-                  alt="uploaded"
-                  className="chat-image"
-                />
-              ) : (
-                <a
-                  href={msg.content.replace('📎 Файл: ', '')}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  📎 Скачать файл
-                </a>
-              )
-            ) : (
-              msg.content
-            )}
-          </div>
-        ))}
+            📎 Скачать файл
+          </a>
+        )
+      ) : (
+        msg.content
+      )}
+    </div>
+    {msg.createdAt && (
+      <div className="chat-timestamp">
+        {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+      </div>
+    )}
+  </div>
+))}
       </div>
 
       <div className="chat-input-container">

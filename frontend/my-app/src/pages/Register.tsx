@@ -5,7 +5,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import '../styles/Register.css';
 
 export default function Register() {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -13,13 +13,13 @@ export default function Register() {
   const handleRegister = async () => {
     setError('');
 
-    if (!email || !password) {
-      setError('Введите email и пароль');
+    if (!username || !password) {
+      setError('Введите username и пароль');
       return;
     }
 
     try {
-      await register(email, password);
+      await register(username, password);
       navigate('/login');
     } catch (e) {
       setError('Ошибка регистрации. Возможно, пользователь уже существует.');
@@ -31,9 +31,9 @@ export default function Register() {
       <div className="register-box">
         <h2>Регистрация</h2>
         <input
-          placeholder="Email"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
+          placeholder="Username"
+          value={username}
+          onChange={e => setUsername(e.target.value)}
         />
         <input
           type="password"
