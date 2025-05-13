@@ -71,7 +71,6 @@ const decryptAesKeyWithRsa = async (
     rsaPrivateKey,
     encryptedAesKey
   );
-  console.log("kashira")
   return await subtle.importKey(
     'raw',
     rawAesKey,

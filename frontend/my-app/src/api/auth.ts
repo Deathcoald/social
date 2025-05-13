@@ -33,6 +33,21 @@ export const register = async (username: string, password: string) => {
 
   const { encryptionPublicKey, encryptionPrivateKey } = await generateEncryptionKeys();
 
+  if (!username || username.length < 3) {
+    throw new Error('Имя пользователя должно содержать минимум 3 символа.');
+  }
+
+  if (!password || password.length < 8) {
+    throw new Error('Пароль должен содержать минимум 8 символов.');
+  }
+
+  const hasLetter = /[a-zA-Z]/.test(password);
+  const hasNumber = /\d/.test(password);
+
+  if (!hasLetter || !hasNumber) {
+    throw new Error('Пароль должен содержать хотя бы одну букву и одну цифру.');
+  }
+
   console.log("Sending registration data:", {
     username,
     password,

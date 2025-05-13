@@ -59,7 +59,6 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 def authenticate_ws_user(token: str, db: Session) -> models.User:
     try:
-        print(token)
         payload = decode(token, settings.secret_key, algorithms=[settings.algorithm])
         user_id: int = payload.get("user_id")
         if user_id is None:

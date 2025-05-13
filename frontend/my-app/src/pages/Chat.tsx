@@ -123,9 +123,29 @@ export default function Chat() {
 
     socket.onmessage = async (event) => {
       const data = JSON.parse(event.data);
+
       console.log("Получено сообщение:", data);
 
-      if (data.content && aesKey) {
+      if (data.type === "edit" && aesKey) {
+      try {
+        const decrypted = await aesDecrypt(data.content, aesKey);
+
+        setMessages((prev) =>
+        prev.map((m) => (m.id === data.id ? { ...m, content: decrypted } : m))
+    );
+    }
+    catch (err) 
+    {
+      console.error("Ошибка расшифровки изменённого сообщения:", err);
+    }
+    return;
+  } 
+  if (data.type === "delete") 
+    {
+    setMessages((prev) => prev.filter((m) => m.id !== data.id));
+    return;
+  }
+  if (data.content && aesKey) {
         try {
           const decryptedMessage = await aesDecrypt(data.content, aesKey);
           setMessages((prev) => [...prev, {
@@ -134,7 +154,9 @@ export default function Chat() {
             content: decryptedMessage,
             createdAt: data.created_at,
           }]);
-        } catch (error) {
+        } 
+        catch (error) 
+        {
           console.error("Ошибка при расшифровке сообщения:", error);
         }
       }
@@ -154,36 +176,64 @@ export default function Chat() {
   }, [token, receiverId, aesKey]);
 
   const handleSendMessage = async () => {
-    if (!aesKey || !ws || ws.readyState !== WebSocket.OPEN || !message.trim()) return;
+  if (!aesKey || !ws || ws.readyState !== WebSocket.OPEN || !message.trim()) return;
 
-    try {
-      const encryptedMessage = await aesEncrypt(aesKey, message);
+  try {
+    const encryptedMessage = await aesEncrypt(aesKey, message);
+    const tempId = Date.now();
 
-      const msg = {
-        content: encryptedMessage,
-        receiver_id: receiverId,
+    const msg = {
+      content: encryptedMessage,
+      receiver_id: receiverId,
+      temp_id: tempId,
+    };
+
+    const waitForResponse = new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error("Ответ от сервера не получен")), 5000);
+
+      const handleResponse = async (event: MessageEvent) => {
+        try {
+          const data = JSON.parse(event.data);
+
+          if (data.temp_id === tempId && data.id) {
+            const decrypted = await aesDecrypt(data.content, aesKey);
+            
+            ws.removeEventListener("message", handleResponse);
+            clearTimeout(timeout);
+            resolve();
+          }
+        } catch (err) {
+          console.error("Ошибка обработки ответа:", err);
+          clearTimeout(timeout);
+          reject(err);
+        }
       };
 
-      ws.send(JSON.stringify(msg));
-      setMessages((prev) => [...prev, {
-        id: Date.now(),
-        senderId: currentUserId ?? 0,
-        content: message,
-      }]);
+      ws.addEventListener("message", handleResponse);
+    });
 
-      setMessage('');
-    } catch (error) {
-      console.error("Ошибка при отправке сообщения:", error);
-    }
-  };
+    ws.send(JSON.stringify(msg));
+    setMessage('');
+    await waitForResponse;
 
-  const handleDelete = async (id: number) => {
+  } catch (error) {
+    console.error("Ошибка при отправке сообщения:", error);
+  }
+};
+
+const handleDelete = async (id: number) => {
   try {
     await fetch(`http://localhost:8000/chat/messages/${id}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
     });
+
     setMessages((prev) => prev.filter((msg) => msg.id !== id));
+    console.log("")
+    ws?.send(JSON.stringify({
+      type: "delete",
+      id,
+    }));
   } catch (err) {
     console.error("Ошибка при удалении:", err);
   }
@@ -191,29 +241,20 @@ export default function Chat() {
 
 const handleEdit = async (msg: ChatMessage) => {
   const newText = prompt("Новое сообщение:", msg.content);
-  if (!newText) 
-    return;
-
-   if (!aesKey) {
-    console.error("AES ключ не готов");
-    return;
-  }
+  if (!newText || !aesKey) return;
 
   try {
-    const encrypted = await aesEncrypt(aesKey, newText); 
+    const encrypted = await aesEncrypt(aesKey, newText);
 
-    await fetch(`http://localhost:8000/chat/messages/${msg.id}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ content: encrypted }),
-    });
-
-    setMessages((prev) =>
-      prev.map((m) => (m.id === msg.id ? { ...m, content: newText } : m)) 
+    ws?.send(JSON.stringify({
+      type: "edit",
+      id: msg.id,
+      content: encrypted,
+    }));
+     setMessages((prev) =>
+      prev.map((m) => (m.id === msg.id ? { ...m, content: newText } : m))
     );
+
   } catch (err) {
     console.error("Ошибка при редактировании:", err);
   }

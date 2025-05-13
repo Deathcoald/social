@@ -28,11 +28,64 @@ async def websocket_endpoint(
             data = await websocket.receive_json()
             print(f"Получено сообщение: {data}")
 
+            print(f"Тип запроса: {data.get('type')}")
+
+            if data.get("type") == "edit":
+                msg_id = data["id"]
+                new_content = data["content"]
+
+                msg = db.query(models.Messages).filter(models.Messages.id == msg_id).first()
+
+                if msg and msg.sender_id == user.id:
+
+                    msg.content = new_content
+                    
+                    db.commit()
+                    db.refresh(msg)
+
+                    if msg.receiver_id in active_connections:
+                        await active_connections[msg.receiver_id].send_json({
+                            "type": "edit",
+                            "id": msg_id,
+                            "content": new_content,
+                            "sender_id": msg.sender_id,
+                            "created_at": str(msg.created_at),
+                        })
+
+                continue
+
+            elif data.get("type") == "delete":
+                msg_id = data["id"]
+
+                msg = db.query(models.Messages).filter(models.Messages.id == msg_id).first()
+
+                print(msg)
+                print(msg.sender_id)
+                print(user.id)
+
+                if msg and msg.sender_id == user.id:
+                    receiver_id = msg.receiver_id
+
+                    db.delete(msg)
+                    db.commit()
+
+                    print(active_connections)
+
+                    if msg.receiver_id in active_connections:
+                        print(active_connections)
+                        await active_connections[msg.receiver_id].send_json({
+                                "type": "delete",
+                                "id": msg_id
+                            })
+                continue
+
             receiver_id = int(data.get("receiver_id"))
             content = data.get("content")
 
             if not receiver_id or not content:
                 continue
+               
+            temp_id = data.get("temp_id")
 
             new_message = models.Messages(
                 sender_id=user.id,
@@ -43,8 +96,17 @@ async def websocket_endpoint(
             db.commit()
 
 
+            await websocket.send_json({
+            "id": new_message.id,
+            "temp_id": temp_id,
+            "sender_id": user.id,
+            "receiver_id": receiver_id,
+            "content": content,
+            "created_at": str(new_message.created_at),
+            })
+
+
             if receiver_id in active_connections:
-                print(f"Отправляем сообщение {content} пользователю {receiver_id}")
                 try:
                     await active_connections[receiver_id].send_json({
                         "id": new_message.id,
@@ -53,7 +115,7 @@ async def websocket_endpoint(
                         "content": content,
                         "created_at": str(new_message.created_at)
                     })
-                except RuntimeError as e:
+                except RuntimeError:
                     print(f"Ошибка при отправке пользователю {receiver_id}: соединение закрыто.")
                     del active_connections[receiver_id]
 
@@ -80,6 +142,9 @@ async def websocket_endpoint(websocket: WebSocket, token: str, db: Session = Dep
 def update_message(message_id: int, payload: schemas.Update_message, db: Session = Depends(database.get_db), current_user: models.User = Depends(oauth2.get_current_user)):
     message = db.query(models.Messages).filter(models.Messages.id == message_id).first()
 
+    print(f"Current user ID: {current_user.id}")
+    print(f"Message sender ID: {message.sender_id if message else 'Message not found'}")
+
     if not message or message.sender_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
     
@@ -95,9 +160,6 @@ def delete_message(message_id: int, db: Session = Depends(database.get_db), curr
 
     if not message or message.sender_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
-    
-    db.delete(message)
-    db.commit()
 
     return {"status": "deleted"}
 

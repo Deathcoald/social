@@ -21,8 +21,8 @@ export default function Register() {
     try {
       await register(username, password);
       navigate('/login');
-    } catch (e) {
-      setError('Ошибка регистрации. Возможно, пользователь уже существует.');
+    } catch (e: any) {
+      setError(e.message);
     }
   };
 
