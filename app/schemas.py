@@ -32,7 +32,8 @@ class PostOut(BaseModel):
 class UserCreate(BaseModel):
     username: str
     password: str
-    public_key : str 
+    public_key: str 
+    private_key: str
 
 class UserOut(BaseModel):
     id: int
@@ -55,6 +56,15 @@ class Token_Data(BaseModel):
 class LoginResponse(BaseModel):
     access_token: str
     token_type: str
+
+class LoginOut(BaseModel):
+    id: int
+    username: str
+    public_key: str
+    private_key: str
+
+    class Config:
+        orm_model = True
 
 class Vote(BaseModel):
     post_id : int

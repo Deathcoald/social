@@ -110,7 +110,7 @@ export default function ChatInit() {
   return (
   <div className="chat-init-wrapper">
     <div className="chat-sidebar">
-      <h3>Диалоги</h3>
+      <h3>Чаты</h3>
       {existingChats.length === 0 ? (
         <p className="empty">Нет активных чатов</p>
       ) : (

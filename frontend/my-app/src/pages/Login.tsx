@@ -25,6 +25,7 @@ export default function Login() {
       await login(username, password);
       navigate('/chat-init');
     } catch (e) {
+      console.log(e)
       setError('Неверный username или пароль');
     }
   };

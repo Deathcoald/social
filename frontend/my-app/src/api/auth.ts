@@ -1,5 +1,7 @@
 // Файл: src/api/auth.ts
 import axios from 'axios';
+import { encryptPrivateKeyWithPassword } from '../crypto/rsa';
+import { decryptPrivateKeyWithPassword } from '../crypto/rsa';
 
 const API_URL = 'http://localhost:8000';
 
@@ -12,11 +14,24 @@ export const login = async (username: string, password: string) => {
     }),
     { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
   );
-  console.log('token', res.data.access_token)
   
-  localStorage.setItem('token', res.data.access_token);
+  const token = res.data.access_token;
+  localStorage.setItem('token', token);
   sessionStorage.setItem("currentUsername", username);
+
+  const userRes = await axios.get(`${API_URL}/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const EncryptedPrivateKey = userRes.data.private_key;
+
+  localStorage.setItem('EncryptedPrivateKey', EncryptedPrivateKey)
+
+  const privateKey = await decryptPrivateKeyWithPassword(EncryptedPrivateKey, password);
+
+  sessionStorage.setItem('decryptedPrivateKey', privateKey);
 };
+
 
 
 export const getCurrentUser = async () => {
@@ -48,21 +63,14 @@ export const register = async (username: string, password: string) => {
     throw new Error('Пароль должен содержать хотя бы одну букву и одну цифру.');
   }
 
-  console.log("Sending registration data:", {
-    username,
-    password,
-    encryption_public_key: encryptionPublicKey,
-  });
+  const encryptedPrivateKey = await encryptPrivateKeyWithPassword(encryptionPrivateKey, password);
 
   const res = await axios.post(`${API_URL}/users/`, {
     username,
     password,
     public_key: encryptionPublicKey,
+    private_key: encryptedPrivateKey,
   });
-
-  console.log("Server response:", res.data);
-
-   localStorage.setItem(`encrypyionPrivateKey-${username}`, encryptionPrivateKey);
 
   return res.data;
 };

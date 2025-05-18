@@ -52,7 +52,7 @@ export default function Chat() {
     const initChat = async () => {
       const encryptedSenderKeyBase64 = localStorage.getItem("chatAesKeyEncrypted");
       const username = sessionStorage.getItem("currentUsername");
-      const privateKeyPem = localStorage.getItem(`encrypyionPrivateKey-${username}`);
+      const privateKeyPem = sessionStorage.getItem(`decryptedPrivateKey`);
       
       if (!encryptedSenderKeyBase64 || !privateKeyPem) {
         console.error("Не хватает данных для расшифровки AES-ключа");
@@ -126,7 +126,7 @@ export default function Chat() {
 
     socket.onmessage = async (event) => {
       const data = JSON.parse(event.data);
-      
+
       console.log(data.type)
 
       if (data.type === "edit" && aesKey) {

@@ -22,6 +22,7 @@ class User(Base):
     username = Column(String, nullable=False, unique=True)
     password = Column(String, nullable=False)
     public_key = Column(String, nullable=False)
+    private_key = Column(String, nullable=False)
 
 class Vote(Base):
     __tablename__  = "votes"

@@ -19,6 +19,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     op.add_column('users', sa.Column('public_key', sa.Text(), nullable=False))
+    op.add_column('users', sa.Column('private_key', sa.Text(), nullable=False))
     pass
 
 
