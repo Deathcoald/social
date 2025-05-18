@@ -14,6 +14,7 @@ import {
 type ChatMessage = {
   id: number;
   senderId: number;
+  receiverId?: number;
   content: string;
   createdAt?: string;
 };
@@ -43,15 +44,16 @@ export default function Chat() {
 
   const currentUserId = getUserIdFromToken(token);
 
+  const handleGoBack = () => {
+    navigate("/chat-init"); 
+  };
+
   useEffect(() => {
     const initChat = async () => {
       const encryptedSenderKeyBase64 = localStorage.getItem("chatAesKeyEncrypted");
       const username = sessionStorage.getItem("currentUsername");
       const privateKeyPem = localStorage.getItem(`encrypyionPrivateKey-${username}`);
       
-      console.log(encryptedSenderKeyBase64)
-      console.log(privateKeyPem)
-
       if (!encryptedSenderKeyBase64 || !privateKeyPem) {
         console.error("Не хватает данных для расшифровки AES-ключа");
         return;
@@ -59,7 +61,6 @@ export default function Chat() {
 
       try {
         const aesKey = await decryptAesKeyWithRsa(encryptedSenderKeyBase64, privateKeyPem);
-
         setAesKey(aesKey);
 
         const rawKey = await window.crypto.subtle.exportKey("raw", aesKey);
@@ -75,7 +76,8 @@ export default function Chat() {
 
   useEffect(() => {
     const fetchHistory = async () => {
-      if (!token || !receiverId || !aesKey) return;
+      if (!token || !receiverId || !aesKey) 
+        return;
 
       try {
         const response = await fetch(`http://localhost:8000/chat/history/${receiverId}`, {
@@ -85,6 +87,7 @@ export default function Chat() {
         });
 
         const data = await response.json();
+        
         const decryptedMessages: ChatMessage[] = [];
 
         for (const msg of data) {
@@ -123,29 +126,30 @@ export default function Chat() {
 
     socket.onmessage = async (event) => {
       const data = JSON.parse(event.data);
-
-      console.log("Получено сообщение:", data);
+      
+      console.log(data.type)
 
       if (data.type === "edit" && aesKey) {
-      try {
-        const decrypted = await aesDecrypt(data.content, aesKey);
+        try {
+          const decrypted = await aesDecrypt(data.content, aesKey);
+          setMessages((prev) =>
+            prev.map((m) => (m.id === data.id ? { ...m, content: decrypted } : m))
+          );
+        } catch (err) {
+          console.error("Ошибка расшифровки изменённого сообщения:", err);
+        }
+        return;
+      }
 
-        setMessages((prev) =>
-        prev.map((m) => (m.id === data.id ? { ...m, content: decrypted } : m))
-    );
-    }
-    catch (err) 
-    {
-      console.error("Ошибка расшифровки изменённого сообщения:", err);
-    }
-    return;
-  } 
-  if (data.type === "delete") 
-    {
-    setMessages((prev) => prev.filter((m) => m.id !== data.id));
-    return;
-  }
-  if (data.content && aesKey) {
+      if (data.type === "delete") 
+        {
+        console.log(data.type)
+
+        setMessages((prev) => prev.filter((m) => m.id !== data.id));
+        return;
+      }
+
+      if (data.content && aesKey) {
         try {
           const decryptedMessage = await aesDecrypt(data.content, aesKey);
           setMessages((prev) => [...prev, {
@@ -154,9 +158,7 @@ export default function Chat() {
             content: decryptedMessage,
             createdAt: data.created_at,
           }]);
-        } 
-        catch (error) 
-        {
+        } catch (error) {
           console.error("Ошибка при расшифровке сообщения:", error);
         }
       }
@@ -176,142 +178,120 @@ export default function Chat() {
   }, [token, receiverId, aesKey]);
 
   const handleSendMessage = async () => {
-  if (!aesKey || !ws || ws.readyState !== WebSocket.OPEN || !message.trim()) return;
+    if (!aesKey || !ws || ws.readyState !== WebSocket.OPEN || !message.trim()) return;
 
-  try {
-    const encryptedMessage = await aesEncrypt(aesKey, message);
-    const tempId = Date.now();
+    try {
+      const encryptedMessage = await aesEncrypt(aesKey, message);
+      const tempId = Date.now();
 
-    const msg = {
-      content: encryptedMessage,
-      receiver_id: receiverId,
-      temp_id: tempId,
-    };
-
-    const waitForResponse = new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error("Ответ от сервера не получен")), 5000);
-
-      const handleResponse = async (event: MessageEvent) => {
-        try {
-          const data = JSON.parse(event.data);
-
-          if (data.temp_id === tempId && data.id) {
-            const decrypted = await aesDecrypt(data.content, aesKey);
-            
-            ws.removeEventListener("message", handleResponse);
-            clearTimeout(timeout);
-            resolve();
-          }
-        } catch (err) {
-          console.error("Ошибка обработки ответа:", err);
-          clearTimeout(timeout);
-          reject(err);
-        }
+      const msg = {
+        content: encryptedMessage,
+        receiver_id: receiverId,
+        temp_id: tempId,
       };
 
-      ws.addEventListener("message", handleResponse);
-    });
+      const waitForResponse = new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error("Ответ от сервера не получен")), 5000);
 
-    ws.send(JSON.stringify(msg));
-    setMessage('');
-    await waitForResponse;
+        const handleResponse = async (event: MessageEvent) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.temp_id === tempId && data.id) {
+              const decrypted = await aesDecrypt(data.content, aesKey);
+              ws.removeEventListener("message", handleResponse);
+              clearTimeout(timeout);
+              resolve();
+            }
+          } catch (err) {
+            console.error("Ошибка обработки ответа:", err);
+            clearTimeout(timeout);
+            reject(err);
+          }
+        };
 
-  } catch (error) {
-    console.error("Ошибка при отправке сообщения:", error);
-  }
-};
+        ws.addEventListener("message", handleResponse);
+      });
 
-const handleDelete = async (id: number) => {
-  try {
-    await fetch(`http://localhost:8000/chat/messages/${id}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    });
+      ws.send(JSON.stringify(msg));
+      setMessage('');
+      await waitForResponse;
 
-    setMessages((prev) => prev.filter((msg) => msg.id !== id));
-    console.log("")
-    ws?.send(JSON.stringify({
-      type: "delete",
-      id,
-    }));
-  } catch (err) {
-    console.error("Ошибка при удалении:", err);
-  }
-};
+    } catch (error) {
+      console.error("Ошибка при отправке сообщения:", error);
+    }
+  };
 
-const handleEdit = async (msg: ChatMessage) => {
-  const newText = prompt("Новое сообщение:", msg.content);
-  if (!newText || !aesKey) return;
+  const handleDelete = async (id: number) => {
+    try {
+      await fetch(`http://localhost:8000/chat/messages/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-  try {
-    const encrypted = await aesEncrypt(aesKey, newText);
+      setMessages((prev) => prev.filter((msg) => msg.id !== id));
+      ws?.send(JSON.stringify({ type: "delete", id }));
+    } catch (err) {
+      console.error("Ошибка при удалении:", err);
+    }
+  };
 
-    ws?.send(JSON.stringify({
-      type: "edit",
-      id: msg.id,
-      content: encrypted,
-    }));
-     setMessages((prev) =>
-      prev.map((m) => (m.id === msg.id ? { ...m, content: newText } : m))
-    );
+  const handleEdit = async (msg: ChatMessage) => {
+    const newText = prompt("Новое сообщение:", msg.content);
+    if (!newText || !aesKey) return;
 
-  } catch (err) {
-    console.error("Ошибка при редактировании:", err);
-  }
-};
+    try {
+      const encrypted = await aesEncrypt(aesKey, newText);
+      ws?.send(JSON.stringify({ type: "edit", id: msg.id, content: encrypted }));
+      setMessages((prev) =>
+        prev.map((m) => (m.id === msg.id ? { ...m, content: newText } : m))
+      );
+    } catch (err) {
+      console.error("Ошибка при редактировании:", err);
+    }
+  };
 
   return (
     <div className="chat-container">
+      <button onClick={handleGoBack} className="back-button">← Назад</button>
       <h2 className="chat-header">Chat with {decodedReceiverName}</h2>
-
-      <button
-        onClick={() => navigate(`/profile/${receiverId}`)}
-        className="chat-profile-button"
-      >
-        Открыть профиль
-      </button>
 
       <div className="chat-messages">
         {messages.map((msg, index) => (
-  <div
-    key={index}
-    className={`chat-message ${msg.senderId === currentUserId ? 'user' : 'other'}`}
-  >
-    {msg.senderId === currentUserId && (
-  <div className="chat-actions">
-    <button onClick={() => handleEdit(msg)}>✏️</button>
-    <button onClick={() => handleDelete(msg.id)}>🗑️</button>
-  </div>
-)}
-
-    <div className="chat-content">
-      {msg.content.startsWith('📎 Файл: ') ? (
-        isImage(msg.content.replace('📎 Файл: ', '')) ? (
-          <img
-            src={msg.content.replace('📎 Файл: ', '')}
-            alt="uploaded"
-            className="chat-image"
-          />
-        ) : (
-          <a
-            href={msg.content.replace('📎 Файл: ', '')}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            📎 Скачать файл
-          </a>
-        )
-      ) : (
-        msg.content
-      )}
-    </div>
-    {msg.createdAt && (
-      <div className="chat-timestamp">
-        {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-      </div>
-    )}
-  </div>
-))}
+          <div key={index} className={`chat-message ${msg.senderId === currentUserId ? 'user' : 'other'}`}>
+            {msg.senderId === currentUserId && (
+              <div className="chat-actions">
+                <button onClick={() => handleEdit(msg)}>✏️</button>
+                <button onClick={() => handleDelete(msg.id)}>🗑️</button>
+              </div>
+            )}
+            <div className="chat-content">
+              {msg.content.startsWith('📎 Файл: ') ? (
+                isImage(msg.content.replace('📎 Файл: ', '')) ? (
+                  <img
+                    src={msg.content.replace('📎 Файл: ', '')}
+                    alt="uploaded"
+                    className="chat-image"
+                  />
+                ) : (
+                  <a
+                    href={msg.content.replace('📎 Файл: ', '')}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    📎 Скачать файл
+                  </a>
+                )
+              ) : (
+                msg.content
+              )}
+            </div>
+            {msg.createdAt && (
+              <div className="chat-timestamp">
+                {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </div>
+            )}
+          </div>
+        ))}
       </div>
 
       <div className="chat-input-container">
@@ -321,12 +301,10 @@ const handleEdit = async (msg: ChatMessage) => {
           onChange={(e) => setMessage(e.target.value)}
           placeholder="Type a message"
         />
-
         <FileUpload onUpload={(url) => {
           const msg = `📎 Файл: ${url}`;
           setMessage(msg);
         }} />
-
         <button onClick={handleSendMessage} disabled={!aesKey || !message.trim()}>
           Send
         </button>

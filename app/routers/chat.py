@@ -17,18 +17,12 @@ async def websocket_endpoint(
 ):
     try:
         user = oauth2.authenticate_ws_user(token, db)
-        print(f"Подключение пользователя {user.id}")
 
         await websocket.accept()
         active_connections[user.id] = websocket
 
-        print("WebSocket соединение установлено.")
-
         while True:
             data = await websocket.receive_json()
-            print(f"Получено сообщение: {data}")
-
-            print(f"Тип запроса: {data.get('type')}")
 
             if data.get("type") == "edit":
                 msg_id = data["id"]
@@ -37,9 +31,7 @@ async def websocket_endpoint(
                 msg = db.query(models.Messages).filter(models.Messages.id == msg_id).first()
 
                 if msg and msg.sender_id == user.id:
-
                     msg.content = new_content
-                    
                     db.commit()
                     db.refresh(msg)
 
@@ -59,24 +51,18 @@ async def websocket_endpoint(
 
                 msg = db.query(models.Messages).filter(models.Messages.id == msg_id).first()
 
-                print(msg)
-                print(msg.sender_id)
-                print(user.id)
-
                 if msg and msg.sender_id == user.id:
                     receiver_id = msg.receiver_id
 
                     db.delete(msg)
                     db.commit()
 
-                    print(active_connections)
-
                     if msg.receiver_id in active_connections:
-                        print(active_connections)
+
                         await active_connections[msg.receiver_id].send_json({
-                                "type": "delete",
-                                "id": msg_id
-                            })
+                            "type": "delete",
+                            "id": msg_id
+                        })
                 continue
 
             receiver_id = int(data.get("receiver_id"))
@@ -84,7 +70,7 @@ async def websocket_endpoint(
 
             if not receiver_id or not content:
                 continue
-               
+
             temp_id = data.get("temp_id")
 
             new_message = models.Messages(
@@ -95,16 +81,14 @@ async def websocket_endpoint(
             db.add(new_message)
             db.commit()
 
-
             await websocket.send_json({
-            "id": new_message.id,
-            "temp_id": temp_id,
-            "sender_id": user.id,
-            "receiver_id": receiver_id,
-            "content": content,
-            "created_at": str(new_message.created_at),
+                "id": new_message.id,
+                "temp_id": temp_id,
+                "sender_id": user.id,
+                "receiver_id": receiver_id,
+                "content": content,
+                "created_at": str(new_message.created_at),
             })
-
 
             if receiver_id in active_connections:
                 try:
@@ -113,7 +97,7 @@ async def websocket_endpoint(
                         "sender_id": user.id,
                         "receiver_id": receiver_id,
                         "content": content,
-                        "created_at": str(new_message.created_at)
+                        "created_at": str(new_message.created_at),
                     })
                 except RuntimeError:
                     print(f"Ошибка при отправке пользователю {receiver_id}: соединение закрыто.")
@@ -164,7 +148,6 @@ def delete_message(message_id: int, db: Session = Depends(database.get_db), curr
     return {"status": "deleted"}
 
 
-
 @router.get("/chat/init/{username}")
 def init_chat(
     username: str,
@@ -204,11 +187,11 @@ def init_chat(
         receiver_aes_key = AES.encrypt_aes_key_with_rsa(receiver.public_key, aes_key) 
 
         new_user_key = models.UserKey(
-                sender_id=user.id,
-                receiver_id=int(receiver.id),
-                sender_aes_key=base64.b64encode(sender_aes_key).decode(),
-                receiver_aes_key = base64.b64encode(receiver_aes_key).decode()
-            )
+            sender_id=user.id,
+            receiver_id=int(receiver.id),
+            sender_aes_key=base64.b64encode(sender_aes_key).decode(),
+            receiver_aes_key=base64.b64encode(receiver_aes_key).decode()
+        )
         db.add(new_user_key)
         db.commit()
 
@@ -219,6 +202,7 @@ def init_chat(
             "sender_aes_key": new_user_key.sender_aes_key,
             "receiver_aes_key": new_user_key.receiver_aes_key
         }
+
 
 @router.get("/chat/history/{receiver_id}")
 def get_chat_history(

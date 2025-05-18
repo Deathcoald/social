@@ -39,7 +39,6 @@ class Messages(Base):
     receiver_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     content = Column(Text, nullable=False)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text('now()'))
-    is_read = Column(Boolean, default=False, nullable=False)
 
 class UserKey(Base):
     __tablename__ = "user_aes_keys"
