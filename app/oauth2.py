@@ -1,10 +1,9 @@
 import jwt
-import base64
 
-from jwt import InvalidTokenError, decode
+from jwt import decode
 from fastapi import HTTPException, status, Depends
 from jwt.exceptions import InvalidTokenError
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session

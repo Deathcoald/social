@@ -1,4 +1,11 @@
 body {
+  --spacing: 0.75rem;
+
+  --radius: .625rem;
+
+  --color-lime-500: oklch(76.8% 0.233 130.85);
+  --color-lime-700: oklch(53.2% 0.157 131.589);
+
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',

@@ -1,13 +1,8 @@
 from fastapi import FastAPI, Response, status, HTTPException, Depends, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from pathlib import Path
 
-from . import models
-from .database import engine, get_db
 from .routers import post, user, auth, vote, chat, files
-from .config import settings
 
 
 app = FastAPI()

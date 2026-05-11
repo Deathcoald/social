@@ -1,7 +1,8 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from pydantic.types import conint
+from .const import ChatType
 
 
 class PostBase(BaseModel):
@@ -69,6 +70,11 @@ class LoginOut(BaseModel):
 class Vote(BaseModel):
     post_id : int
     dir: conint(le=1)
+
+class ChatCreate(BaseModel):
+    type: ChatType = ChatType.DM
+    members: List[int] = Field(min_length=1)
+    name: Optional[str] = None
 
 class Send_message(BaseModel):
     sender_id : int
