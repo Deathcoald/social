@@ -70,5 +70,5 @@ def authenticate_ws_user(token: str, db: Session) -> models.User:
         return user
     except Exception as e:
         print("WebSocket error:", e)
-        raise Exception("Token decode error")
-    
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+

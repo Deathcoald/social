@@ -14,7 +14,7 @@ import {
 type ChatMessage = {
   id: number;
   senderId: number;
-  receiverId?: number;
+  chatId: number;
   content: string;
   createdAt?: string;
 };
@@ -24,8 +24,8 @@ function isImage(url: string): boolean {
 }
 
 export default function Chat() {
-  const { receiverId, receiverName } = useParams();
-  const decodedReceiverName = receiverName ? decodeURIComponent(receiverName) : '';
+  const { chatId } = useParams();
+  const [chatName, setChatName] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [message, setMessage] = useState('');
   const [ws, setWs] = useState<WebSocket | null>(null);
@@ -41,53 +41,75 @@ export default function Chat() {
       return null;
     }
   };
+  useEffect(() => {
+  let cancelled = false;
+
+  const initChat = async () => {
+    const privateKeyPem =
+      sessionStorage.getItem("decryptedPrivateKey");
+
+    if (!privateKeyPem || !chatId) {
+      console.error("Нет privateKey или chatId");
+      return;
+    }
+
+    try {
+      const res = await fetch(
+        `http://localhost:8000/chat/chat_key?chat_id=${chatId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await res.json();
+
+      if (!data.chat_key) {
+        console.error("chat_key отсутствует");
+        return;
+      }
+
+      const aes = await decryptAesKeyWithRsa(
+        data.chat_key,
+        privateKeyPem
+      );
+
+      if (!cancelled) {
+        setAesKey(aes);
+      }
+    } catch (err) {
+      console.error("Ошибка загрузки chat_key:", err);
+    }
+  };
+
+  initChat();
+
+  return () => {
+    cancelled = true;
+  };
+}, [chatId, token]);
 
   const currentUserId = getUserIdFromToken(token);
 
   const handleGoBack = () => {
-    navigate("/chat-init"); 
+    navigate("/chat-init");
   };
 
   useEffect(() => {
-    const initChat = async () => {
-      const encryptedSenderKeyBase64 = localStorage.getItem("chatAesKeyEncrypted");
-      const username = sessionStorage.getItem("currentUsername");
-      const privateKeyPem = sessionStorage.getItem(`decryptedPrivateKey`);
-      
-      if (!encryptedSenderKeyBase64 || !privateKeyPem) {
-        console.error("Не хватает данных для расшифровки AES-ключа");
-        return;
-      }
-
-      try {
-        const aesKey = await decryptAesKeyWithRsa(encryptedSenderKeyBase64, privateKeyPem);
-        setAesKey(aesKey);
-
-        const rawKey = await window.crypto.subtle.exportKey("raw", aesKey);
-        const keyBytes = Array.from(new Uint8Array(rawKey));
-        sessionStorage.setItem(`aesKey-${receiverId}`, JSON.stringify(keyBytes));
-      } catch (err) {
-        console.error("Ошибка при расшифровке AES-ключа:", err);
-      }
-    };
-
-    initChat();
-  }, [receiverId]);
-
-  useEffect(() => {
     const fetchHistory = async () => {
-      if (!token || !receiverId || !aesKey) 
+      if (!token || !chatId || !aesKey)
         return;
 
       try {
-        const response = await fetch(`http://localhost:8000/chat/history/${receiverId}`, {
+        const response = await fetch(`http://localhost:8000/chat/history/${chatId}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         });
 
         const data = await response.json();
-        
+
         const decryptedMessages: ChatMessage[] = [];
 
         for (const msg of data) {
@@ -95,6 +117,7 @@ export default function Chat() {
             const decryptedContent = await aesDecrypt(msg.content, aesKey);
             decryptedMessages.push({
               id: msg.id,
+              chatId: msg.chat_id,
               senderId: msg.sender_id,
               content: decryptedContent,
               createdAt: msg.created_at,
@@ -111,23 +134,22 @@ export default function Chat() {
     };
 
     fetchHistory();
-  }, [token, receiverId, aesKey]);
+  }, [token, chatId, aesKey]);
 
   useEffect(() => {
-    if (!token || !receiverId || !aesKey) return;
+    if (!token || !chatId || !aesKey) return;
 
     const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-    const socket = new WebSocket(`${protocol}://localhost:8000/ws/chat?token=${token}`);
+    const socket = new WebSocket(
+      `${protocol}://localhost:8000/ws/chat?token=${token}&chat_id=${chatId}`
+    );
 
     socket.onopen = () => {
-      console.log("WebSocket открыт");
       setWs(socket);
     };
 
     socket.onmessage = async (event) => {
       const data = JSON.parse(event.data);
-
-      console.log(data.type)
 
       if (data.type === "edit" && aesKey) {
         try {
@@ -141,10 +163,8 @@ export default function Chat() {
         return;
       }
 
-      if (data.type === "delete") 
+      if (data.type === "delete")
         {
-        console.log(data.type)
-
         setMessages((prev) => prev.filter((m) => m.id !== data.id));
         return;
       }
@@ -154,6 +174,7 @@ export default function Chat() {
           const decryptedMessage = await aesDecrypt(data.content, aesKey);
           setMessages((prev) => [...prev, {
             id: data.id,
+            chatId: data.chat_id,
             senderId: data.sender_id,
             content: decryptedMessage,
             createdAt: data.created_at,
@@ -175,7 +196,7 @@ export default function Chat() {
     return () => {
       socket.close();
     };
-  }, [token, receiverId, aesKey]);
+  }, [token, chatId, aesKey]);
 
   const handleSendMessage = async () => {
     if (!aesKey || !ws || ws.readyState !== WebSocket.OPEN || !message.trim()) return;
@@ -186,7 +207,7 @@ export default function Chat() {
 
       const msg = {
         content: encryptedMessage,
-        receiver_id: receiverId,
+        chat_id: Number(chatId),
         temp_id: tempId,
       };
 
@@ -197,7 +218,6 @@ export default function Chat() {
           try {
             const data = JSON.parse(event.data);
             if (data.temp_id === tempId && data.id) {
-              const decrypted = await aesDecrypt(data.content, aesKey);
               ws.removeEventListener("message", handleResponse);
               clearTimeout(timeout);
               resolve();
@@ -253,7 +273,7 @@ export default function Chat() {
   return (
     <div className="chat-container">
       <button onClick={handleGoBack} className="back-button">← Назад</button>
-      <h2 className="chat-header">Chat with {decodedReceiverName}</h2>
+      <h2 className="chat-header">Chat with {chatName}</h2>
 
       <div className="chat-messages">
         {messages.map((msg, index) => (

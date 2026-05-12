@@ -13,7 +13,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<Register />} />
         <Route path="/chat-init" element={<ChatInit />} />
-        <Route path="/chat/:receiverId/:receiverName" element={<Chat />} />
+        <Route path="/chat/:chatId" element={<Chat />} />
         <Route path="/profile/:userId" element={<ProfilePage />} />
       </Routes>
     </BrowserRouter>
