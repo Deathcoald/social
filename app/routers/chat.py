@@ -127,10 +127,10 @@ async def handle_delete(user, data, db):
     db.delete(msg)
     db.commit()
 
-    await broadcast_to_chat(chat_id, {
+    await broadcast_to_chat(user_id=user.id, chat_id=chat_id, data={
         "type": "delete",
         "id": msg.id
-    }, db)
+    }, db=db)
 
 async def handle_edit(user, data, db):
     msg = db.query(models.Message).filter(
@@ -144,13 +144,14 @@ async def handle_edit(user, data, db):
     db.commit()
 
     await broadcast_to_chat(
-        msg.chat_id,
-        {
+        user_id=user.id,
+        chat_id=msg.chat_id,
+        data={
             "type": "edit",
             "id": msg.id,
             "content": msg.content
         },
-        db
+        db=db
     )
 
 @router.put("/chat/messages/{message_id}")
@@ -303,6 +304,51 @@ def get_chat_history(
         for msg in messages
     ]
 
+
+@router.get("/chat/{chat_id}")
+def get_chat(chat_id: int, request: Request, db: Session = Depends(database.get_db)):
+    token = request.headers.get("Authorization")
+
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail="Token missing"
+        )
+    token = token.split(" ")[1]
+
+    user = oauth2.authenticate_ws_user(
+        token,
+        db
+    )
+
+    chat = db.query(models.Chat).filter(
+        models.Chat.id == chat_id
+    ).first()
+
+    if chat.name:
+        name = chat.name
+    else:
+        other_members = db.query(models.ChatMember).filter(
+            models.ChatMember.chat_id == chat.id,
+            models.ChatMember.user_id != user.id
+        ).all()
+
+        other_user_ids = [m.user_id for m in other_members]
+
+        other_users = db.query(models.User).filter(
+            models.User.id.in_(other_user_ids)
+        ).all()
+
+        name = ", ".join(u.username for u in other_users)
+
+    return {
+        "chat": {
+            "id": chat.id,
+            "name": name,
+            "is_group": chat.is_group
+        }
+    }
+
 @router.get("/chats")
 def get_chats(
     request: Request,
@@ -335,21 +381,21 @@ def get_chats(
     result = []
 
     for chat in chats:
-
-        if chat.is_group:
+        if chat.name:
             name = chat.name
-
         else:
-            other_member = db.query(models.ChatMember).filter(
+            other_members = db.query(models.ChatMember).filter(
                 models.ChatMember.chat_id == chat.id,
                 models.ChatMember.user_id != user.id
-            ).first()
+            ).all()
 
-            other_user = db.query(models.User).filter(
-                models.User.id == other_member.user_id
-            ).first()
+            other_user_ids = [m.user_id for m in other_members]
 
-            name = other_user.username
+            other_users = db.query(models.User).filter(
+                models.User.id.in_(other_user_ids)
+            ).all()
+
+            name = ", ".join(u.username for u in other_users)
 
         result.append({
             "id": chat.id,

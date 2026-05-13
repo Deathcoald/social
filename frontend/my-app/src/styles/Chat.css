@@ -1,6 +1,8 @@
 .chat-container {
     display: flex;
+    width: 100%;
     flex-direction: column;
+    justify-content: center;
     align-items: center;
     padding: 20px;
   }
@@ -10,11 +12,14 @@
   }
   
   .chat-messages {
-    height: 400px;
+    min-height: 43rem;
+    max-height: 80vh;
+    height: 90%;
     width: 100%;
     max-width: 600px;
     overflow-y: auto;
     border: 1px solid #ccc;
+    border-radius: .625rem;
     padding: 10px;
     display: flex;
     flex-direction: column;
@@ -109,6 +114,18 @@
 
 .message-status.read {
   color: #3390ec; 
+}
+
+.chat-actions {
+  display: flex;
+  justify-content: space-between;
+}
+
+.chat-actions button {
+  width: 48px;
+  height: 36px;
+  justify-content: center;
+  align-items: center;
 }
 
 .back-button {

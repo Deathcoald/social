@@ -36,3 +36,16 @@
     transform: rotate(360deg);
   }
 }
+
+.empty-chat {
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.empty-chat h3 {
+  padding: calc(var(--spacing));
+  border: 1px solid #1a1a1a;
+  border-radius: .675rem;
+}

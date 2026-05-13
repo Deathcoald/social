@@ -1,0 +1,99 @@
+.chat-init-wrapper {
+    display: flex;
+    justify-content: center;
+    padding: 24px;
+}
+
+.chat-init-container {
+    width: 100%;
+    max-width: 420px;
+    min-height: 30rem;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+
+    font-family: sans-serif;
+}
+
+
+.chat-init-type-selector {
+    display: flex;
+    gap: 8px;
+}
+
+.chat-init-type-selector button {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid #1a1a1a;
+    background: none;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.chat-init-type-selector button:hover {
+    background: #f2f2f2;
+}
+
+.chat-init-type-selector button.active {
+    background: #4CAF50;
+    color: white;
+    border-color: #4CAF50;
+}
+
+.chat-init-input {
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+}
+
+.chat-init-users-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.chat-init-user-button {
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    background: none;
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.chat-init-user-button.selected {
+    background: #4CAF50;
+    color: white;
+    border-color: #4CAF50;
+}
+
+.chat-init-create-button {
+    padding: 10px;
+    border: 1px solid #1a1a1a;
+    border-radius: 8px;
+    background: none;
+    cursor: pointer;
+}
+
+.chat-init-create-button:hover {
+    background: #4CAF50;
+    color: white;
+}
+
+.chat-init-error {
+    color: red;
+    font-size: 14px;
+}
+
+.chat-init-back-link {
+    margin-top: 8px;
+    font-size: 14px;
+}
+
+.chat-init-back-link-button {
+    color: #1a1a1a;
+    text-decoration: none;
+    padding: var(--spacing);
+    border: 1px solid #1a1a1a;
+    border-radius: .675rem;
+}

@@ -15,7 +15,6 @@
 .chat-main {
   display: flex;
   flex: 1;
-  padding: 40px;
   flex-direction: column;
   gap: 15px;
 }

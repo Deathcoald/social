@@ -1,0 +1,18 @@
+.chat-layout {
+    display: flex;
+    flex: 1;
+}
+
+.chat-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.chat-sidebar {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 100vh;
+}

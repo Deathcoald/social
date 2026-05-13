@@ -42,6 +42,22 @@ export default function Chat() {
     }
   };
   useEffect(() => {
+    if (!chatId) return;
+
+    fetch(`http://localhost:8000/chat/${chatId}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then(res => res.json())
+      .then(data => {
+        setChatName(data.chat.name);
+      })
+      .catch(err => console.error(err));
+  }, [chatId]);
+
+
+  useEffect(() => {
   let cancelled = false;
 
   const initChat = async () => {
@@ -93,7 +109,7 @@ export default function Chat() {
   const currentUserId = getUserIdFromToken(token);
 
   const handleGoBack = () => {
-    navigate("/chat-init");
+    navigate("/chat");
   };
 
   useEffect(() => {
@@ -272,7 +288,6 @@ export default function Chat() {
 
   return (
     <div className="chat-container">
-      <button onClick={handleGoBack} className="back-button">← Назад</button>
       <h2 className="chat-header">Chat with {chatName}</h2>
 
       <div className="chat-messages">

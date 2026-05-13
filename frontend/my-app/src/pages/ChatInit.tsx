@@ -1,12 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import "../styles/ChatInit.css";
-
-type ChatPreview = {
-  id: number;
-  name: string;
-  is_group: boolean;
-};
+import "../styles/InitialChat.css";
 
 type UserPreview = {
   id: number;
@@ -17,7 +11,6 @@ export default function ChatInit() {
   const navigate = useNavigate();
 
   const [users, setUsers] = useState<UserPreview[]>([]);
-  const [chats, setChats] = useState<ChatPreview[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<number[]>([]);
   const [groupName, setGroupName] = useState("");
   const [isGroup, setIsGroup] = useState(false);
@@ -27,8 +20,16 @@ export default function ChatInit() {
 
   useEffect(() => {
     fetchUsers();
-    fetchChats();
   }, []);
+
+  const toggleMode = (mode: boolean) => {
+  setIsGroup(mode);
+  setError("");
+
+  if (!mode && selectedUsers.length > 1) {
+    setSelectedUsers([selectedUsers[0]]);
+  }
+};
 
   const fetchUsers = async () => {
     try {
@@ -45,25 +46,10 @@ export default function ChatInit() {
     }
   };
 
-  const fetchChats = async () => {
-    try {
-      const response = await fetch("http://localhost:8000/chats", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const data = await response.json();
-      setChats(data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
   const toggleUser = (id: number) => {
-    setSelectedUsers((prev) =>
+    setSelectedUsers(prev =>
       prev.includes(id)
-        ? prev.filter((u) => u !== id)
+        ? prev.filter(u => u !== id)
         : [...prev, id]
     );
   };
@@ -101,7 +87,6 @@ export default function ChatInit() {
       }
 
       const data = await response.json();
-
       navigate(`/chat/${data.chat_id}`);
     } catch (err) {
       console.error(err);
@@ -111,37 +96,29 @@ export default function ChatInit() {
 
   return (
     <div className="chat-init-wrapper">
-
-      <div className="chat-sidebar">
-        <h3>Чаты</h3>
-
-        {chats.map((chat) => (
-          <button
-            key={chat.id}
-            className="chat-list-button"
-            onClick={() => navigate(`/chat/${chat.id}`)}
-          >
-            {chat.is_group ? "👥" : "💬"} {chat.name}
-          </button>
-        ))}
-      </div>
-
-      <div className="chat-main">
+      <div className="chat-init-container">
 
         <h2>Создать чат</h2>
 
-        <div className="chat-type-selector">
-          <button onClick={() => setIsGroup(false)}>
-            DM
-          </button>
+            <div className="chat-init-type-selector">
+      <button
+        className={!isGroup ? "active" : ""}
+        onClick={() => toggleMode(false)}
+      >
+        DM
+      </button>
 
-          <button onClick={() => setIsGroup(true)}>
-            GROUP
-          </button>
-        </div>
+      <button
+        className={isGroup ? "active" : ""}
+        onClick={() => toggleMode(true)}
+      >
+        GROUP
+      </button>
+    </div>
 
         {isGroup && (
           <input
+            className="chat-init-input"
             type="text"
             placeholder="Название группы"
             value={groupName}
@@ -149,14 +126,12 @@ export default function ChatInit() {
           />
         )}
 
-        <div className="users-list">
-          {users.map((user) => (
+        <div className="chat-init-users-list">
+          {users.map(user => (
             <button
               key={user.id}
-              className={`user-button ${
-                selectedUsers.includes(user.id)
-                  ? "selected"
-                  : ""
+              className={`chat-init-user-button ${
+                selectedUsers.includes(user.id) ? "selected" : ""
               }`}
               onClick={() => toggleUser(user.id)}
             >
@@ -165,22 +140,18 @@ export default function ChatInit() {
           ))}
         </div>
 
-        {error && (
-          <p className="chat-init-error">
-            {error}
-          </p>
-        )}
+        {error && <p className="chat-init-error">{error}</p>}
 
-        <button onClick={createChat}>
+        <button
+          className="chat-init-create-button"
+          onClick={createChat}
+        >
           Создать чат
         </button>
 
-        <p className="back-link">
-          <Link to="/login">
-            ← Назад
-          </Link>
+        <p className="chat-init-back-link">
+          <Link className="chat-init-back-link-button" to="/login">← Назад</Link>
         </p>
-
       </div>
     </div>
   );
