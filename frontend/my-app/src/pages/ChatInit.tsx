@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { useOutletContext } from "react-router-dom";
 import "../styles/InitialChat.css";
 
 type UserPreview = {
@@ -7,9 +8,13 @@ type UserPreview = {
   username: string;
 };
 
+type OutletContextType = {
+  fetchChats: () => Promise<void>;
+};
+
 export default function ChatInit() {
   const navigate = useNavigate();
-
+  const { fetchChats } = useOutletContext<OutletContextType>();
   const [users, setUsers] = useState<UserPreview[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<number[]>([]);
   const [groupName, setGroupName] = useState("");
@@ -87,6 +92,7 @@ export default function ChatInit() {
       }
 
       const data = await response.json();
+      await fetchChats();
       navigate(`/chat/${data.chat_id}`);
     } catch (err) {
       console.error(err);

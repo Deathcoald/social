@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { jwtDecode } from "jwt-decode";
 import { JwtPayload } from 'jwt-decode';
@@ -17,6 +17,7 @@ type ChatMessage = {
   chatId: number;
   content: string;
   createdAt?: string;
+  isRead?: boolean;
 };
 
 function isImage(url: string): boolean {
@@ -32,6 +33,7 @@ export default function Chat() {
   const [token, setToken] = useState(localStorage.getItem('token') || '');
   const [aesKey, setAesKey] = useState<CryptoKey | null>(null);
   const navigate = useNavigate();
+  const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const getUserIdFromToken = (token: string): number | null => {
     try {
@@ -41,6 +43,11 @@ export default function Chat() {
       return null;
     }
   };
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({
+      behavior: "smooth",
+    });
+  }, [messages]);
   useEffect(() => {
     if (!chatId) return;
 
@@ -56,6 +63,16 @@ export default function Chat() {
       .catch(err => console.error(err));
   }, [chatId]);
 
+  useEffect(() => {
+  if (!chatId || !token) return;
+
+  fetch(`http://localhost:8000/chat/read/${chatId}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}, [chatId]);
 
   useEffect(() => {
   let cancelled = false;
@@ -137,6 +154,7 @@ export default function Chat() {
               senderId: msg.sender_id,
               content: decryptedContent,
               createdAt: msg.created_at,
+               isRead: msg.is_read,
             });
           } catch (err) {
             console.error("Ошибка расшифровки истории сообщения:", err);
@@ -178,6 +196,14 @@ export default function Chat() {
         }
         return;
       }
+      if (data.type === "read") {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === data.id ? { ...m, isRead: true } : m
+          )
+        );
+        return;
+      }
 
       if (data.type === "delete")
         {
@@ -194,6 +220,7 @@ export default function Chat() {
             senderId: data.sender_id,
             content: decryptedMessage,
             createdAt: data.created_at,
+            isRead: data.is_read ?? false
           }]);
         } catch (error) {
           console.error("Ошибка при расшифровке сообщения:", error);
@@ -259,11 +286,6 @@ export default function Chat() {
 
   const handleDelete = async (id: number) => {
     try {
-      await fetch(`http://localhost:8000/chat/messages/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
       setMessages((prev) => prev.filter((msg) => msg.id !== id));
       ws?.send(JSON.stringify({ type: "delete", id }));
     } catch (err) {
@@ -325,8 +347,14 @@ export default function Chat() {
                 {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </div>
             )}
+            {msg.senderId === currentUserId && (
+    <span style={{ marginLeft: 6 }}>
+      {msg.isRead ? "✓✓" : "✓"}
+    </span>
+  )}
           </div>
         ))}
+        <div ref={bottomRef} />
       </div>
 
       <div className="chat-input-container">

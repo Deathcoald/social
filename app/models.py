@@ -50,6 +50,11 @@ class Chat(Base):
     name = Column(String, nullable=True)
     description = Column(Text, nullable=True)
     is_group = Column(Boolean, default=False)
+    last_message_at = Column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=text('now()')
+    )
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text('now()'))
     updated_at = Column(
         TIMESTAMP(timezone=True),

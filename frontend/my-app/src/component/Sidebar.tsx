@@ -9,19 +9,13 @@ type Chat = {
   is_group: boolean;
 };
 
-export default function Sidebar() {
-  const [chats, setChats] = useState<Chat[]>([]);
+type Props = {
+  chats: Chat[];
+};
+
+export default function Sidebar({ chats }: Props) {
   const navigate = useNavigate();
 
-  useEffect(() => {
-    fetch("http://localhost:8000/chats", {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem("token")}`,
-      },
-    })
-      .then(res => res.json())
-      .then(setChats);
-  }, []);
 
   return (
     <div className="sidebar">
@@ -36,11 +30,13 @@ export default function Sidebar() {
         </Link>
       ))}
       </div>
-      <div className="chat-init">
-          <button onClick={() => navigate("/chat/init")}>
-            Create Chat
-          </button>
-      </div>
+        <div className="chat-init-button-container">
+            <div className="chat-init">
+                <button onClick={() => navigate("/chat/init")}>
+                    Create Chat
+                </button>
+            </div>
+        </div>
     </div>
   );
 }

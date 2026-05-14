@@ -32,7 +32,12 @@
 }
 
 .chat-item:hover {
-    background-color: #4CAF50;
+    background-color: var(--color-lime-500);
+}
+
+.chat-init-button-container {
+    display: flex;
+    padding-right: calc(var(--spacing) * 2);
 }
 
 .chat-init {
@@ -48,7 +53,7 @@
     padding-block: calc(var(--spacing) * 2);
     border: 1px solid #1a1a1a;
     border-radius: .625rem;
-    background: #4CAF50;
+    background: var(--color-lime-500);
 }
 
 .chat-init button:hover {

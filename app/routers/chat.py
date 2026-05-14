@@ -2,6 +2,7 @@ import base64
 from collections import defaultdict
 
 from fastapi import WebSocket, APIRouter, Depends, HTTPException, Request, status, WebSocketDisconnect
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from typing import Dict
 
@@ -88,18 +89,57 @@ async def handle_send(user, chat_id, data, db):
     db.commit()
     db.refresh(msg)
 
+    chat = db.query(models.Chat).filter(
+        models.Chat.id == chat_id
+    ).first()
+
+    chat.last_message_at = func.now()
+
+    db.commit()
+    db.refresh(chat)
+
     payload = {
         "id": msg.id,
         "temp_id": temp_id,
         "sender_id": user.id,
         "chat_id": chat_id,
         "content": msg.content,
-        "created_at": str(msg.created_at)
+        "created_at": str(msg.created_at),
+        "is_read": False,
     }
 
     await send_to_user(user.id, payload)
 
     await broadcast_to_chat(user.id, chat_id, payload, db)
+
+@router.post("/chat/read/{chat_id}")
+async def mark_read(chat_id: int, db: Session = Depends(get_db), current_user=Depends(oauth2.get_current_user)):
+    messages = db.query(models.Message).filter(
+        models.Message.chat_id == chat_id,
+        models.Message.sender_id != current_user.id,
+        models.Message.is_read == False
+    ).all()
+
+    msg_ids = [m.id for m in messages]
+
+    db.query(models.Message).filter(
+        models.Message.id.in_(msg_ids)
+    ).update({"is_read": True}, synchronize_session=False)
+
+    db.commit()
+
+    for m in messages:
+        await broadcast_to_chat(
+            user_id=current_user.id,
+            chat_id=chat_id,
+            data={
+                "type": "read",
+                "id": m.id
+            },
+            db=db
+        )
+
+    return {"status": "ok"}
 
 async def handle_ws_message(user, chat_id, data, db):
     msg_type = data.get("type")
@@ -111,8 +151,45 @@ async def handle_ws_message(user, chat_id, data, db):
     if msg_type == "delete":
         await handle_delete(user, data, db)
         return
+    if msg_type == "read":
+        await handle_read(user, data, db)
+        return
 
     await handle_send(user, chat_id, data, db)
+
+async def handle_read(user, data, db):
+    chat_id = data.get("chat_id")
+
+    if not chat_id:
+        return
+
+    messages = db.query(models.Message).filter(
+        models.Message.chat_id == chat_id,
+        models.Message.sender_id != user.id,
+        models.Message.is_read == False
+    ).all()
+
+    msg_ids = [m.id for m in messages]
+
+    if not msg_ids:
+        return
+
+    db.query(models.Message).filter(
+        models.Message.id.in_(msg_ids)
+    ).update({"is_read": True}, synchronize_session=False)
+
+    db.commit()
+
+    for m in messages:
+        await broadcast_to_chat(
+            user_id=user.id,
+            chat_id=chat_id,
+            data={
+                "type": "read",
+                "id": m.id
+            },
+            db=db
+        )
 
 async def handle_delete(user, data, db):
     msg = db.query(models.Message).filter(
@@ -300,6 +377,7 @@ def get_chat_history(
             "sender_id": msg.sender_id,
             "content": msg.content,
             "created_at": str(msg.created_at),
+            "is_read": msg.is_read,
         }
         for msg in messages
     ]
@@ -376,7 +454,7 @@ def get_chats(
 
     chats = db.query(models.Chat).filter(
         models.Chat.id.in_(chat_ids)
-    ).all()
+    ).order_by(models.Chat.last_message_at.desc()).all()
 
     result = []
 
